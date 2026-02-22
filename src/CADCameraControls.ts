@@ -326,6 +326,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this._drag.y = event.clientY;
 		this._rotateVelocity.set( 0, 0 );
 		this._panVelocity.set( 0, 0 );
+		this._dollyVelocity = 0;
 
 		if ( this.domElement ) {
 
@@ -355,6 +356,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 			this._drag.y = event.clientY;
 			this._rotateVelocity.set( 0, 0 );
 			this._panVelocity.set( 0, 0 );
+			this._dollyVelocity = 0;
 			this.dispatchEvent( _startEvent );
 
 		} else if ( this._pointers.length === 2 ) {

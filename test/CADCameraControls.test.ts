@@ -494,6 +494,27 @@ describe( 'damping / inertia', () => {
 
 	} );
 
+	it( 'starting a drag clears dolly velocity from a prior wheel zoom', () => {
+
+		const { controls, camera, element } = createControls( { enableDamping: false } );
+
+		dispatchWheel( element, - 100 );
+		const distanceAfterWheel = camera.position.distanceTo( controls.pivot );
+		expect( distanceAfterWheel ).toBeLessThan( 1000 );
+
+		dispatchPointer( element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 } );
+		dispatchPointer( element, 'pointerup', { button: 0, clientX: 400, clientY: 300 } );
+
+		controls.enableDamping = true;
+		const distanceBefore = camera.position.distanceTo( controls.pivot );
+		controls.update( 1 / 60 );
+		const distanceAfter = camera.position.distanceTo( controls.pivot );
+
+		expect( distanceAfter ).toBeCloseTo( distanceBefore, 5 );
+		controls.dispose();
+
+	} );
+
 } );
 
 describe( 'configuration', () => {
