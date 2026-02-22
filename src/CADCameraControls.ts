@@ -52,7 +52,6 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	camera: PerspectiveCamera | OrthographicCamera;
 	domElement: HTMLElement | null;
 
-	// Configuration
 	enabled: boolean;
 	enableDamping: boolean;
 	dampingFactor: number;
@@ -66,7 +65,6 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	maxDistance: number;
 	preventContextMenu: boolean;
 
-	// Private state
 	private _drag: { isDragging: boolean; mode: 'rotate' | 'pan' | null; x: number; y: number };
 	private _raycaster: Raycaster;
 	private _pointer: Vector2;
@@ -404,7 +402,6 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 	private _onTouchMove( event: PointerEvent ): void {
 
-		// Update stored pointer
 		const index = this._pointers.findIndex( p => p.pointerId === event.pointerId );
 		if ( index === - 1 ) return;
 		this._pointers[ index ] = event;
@@ -420,7 +417,6 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 			this._drag.x = midX;
 			this._drag.y = midY;
 
-			// Two-finger drag
 			if ( this._drag.mode === 'rotate' ) {
 
 				this._applyRotate( dx, dy );
@@ -433,7 +429,6 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 			}
 
-			// Pinch-to-zoom
 			if ( this.touchBindings.pinch ) {
 
 				const currentDistance = this._getPointerDistance();
@@ -443,7 +438,6 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 				const distance = this.camera.position.distanceTo( this.pivot );
 				const step = delta * this.zoomSpeed * Math.max( 1, distance * 0.25 );
 
-				// Use center of pinch as zoom target
 				const el = this.domElement!;
 				const rect = el.getBoundingClientRect();
 				this._wheelPointer.set(
@@ -522,7 +516,6 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 		} else if ( this._pointers.length === 1 ) {
 
-			// Downgrade from two-finger to one-finger
 			this._drag.mode = this.touchBindings.one;
 			this._drag.x = this._pointers[ 0 ].clientX;
 			this._drag.y = this._pointers[ 0 ].clientY;

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import GUI from 'lil-gui';
 import { CADCameraControls } from '../src/CADCameraControls';
-import type { InputBindings, ModifierKey } from '../src/types';
+import { buildInputBindings } from './bindings';
+import type { ButtonLabel, ModifierLabel } from './bindings';
 
 const renderer = new THREE.WebGLRenderer( { antialias: true } );
 renderer.setPixelRatio( window.devicePixelRatio );
@@ -52,9 +53,7 @@ function createPerspectiveCamera(): THREE.PerspectiveCamera {
 
 // Controls
 
-const buttonLabels: Record<number, string> = { 0: 'left', 1: 'middle', 2: 'right' };
-const buttonValues: Record<string, number> = { left: 0, middle: 1, right: 2 };
-const modifierOptions = [ 'ctrl', 'meta', 'alt', 'shift' ];
+const modifierOptions = [ 'none', 'ctrl', 'meta', 'alt', 'shift' ];
 
 const params = {
 	cameraType: 'Perspective' as string,
@@ -64,12 +63,12 @@ const params = {
 	pivotX: 0,
 	pivotY: 0,
 	pivotZ: 0,
-	rotateButton: 'left',
-	panButton: 'right',
-	panModifier: 'ctrl',
+	rotateButton: 'left' as ButtonLabel,
+	panButton: 'right' as ButtonLabel,
+	panModifier: 'none' as ModifierLabel,
 	rotateSpeed: 0.005,
-	panSpeed: 0.0016,
-	zoomSpeed: 0.0012,
+	panSpeed: 0.001,
+	zoomSpeed: 0.005,
 	minDistance: 50,
 	maxDistance: 100000,
 	preventContextMenu: true,
@@ -108,10 +107,11 @@ pivotFolder.add( params, 'pivotZ', - 1000, 1000, 1 ).onChange( applyControls );
 pivotFolder.open();
 
 const inputFolder = gui.addFolder( 'input' );
-const rotateButtonCtrl = inputFolder.add( params, 'rotateButton', [ 'left', 'middle', 'right' ] ).name( 'rotate' ).onChange( onBindingChange );
-const panButtonCtrl = inputFolder.add( params, 'panButton', [ 'left', 'middle', 'right' ] ).name( 'pan' ).onChange( onBindingChange );
+inputFolder.add( params, 'rotateButton', [ 'left', 'middle', 'right' ] ).name( 'rotate' ).onChange( applyControls );
+inputFolder.add( params, 'panButton', [ 'left', 'middle', 'right' ] ).name( 'pan' ).onChange( applyControls );
 const panModifierCtrl = inputFolder.add( params, 'panModifier', modifierOptions ).name( 'pan modifier' ).onChange( applyControls );
 inputFolder.add( params, 'preventContextMenu' ).onChange( applyControls );
+inputFolder.open();
 
 const speedFolder = gui.addFolder( 'speed' );
 speedFolder.add( params, 'rotateSpeed', 0.0005, 0.02, 0.0001 ).onChange( applyControls );
@@ -132,63 +132,18 @@ function mouseLabel( button: number ): string {
 
 }
 
-function onBindingChange(): void {
+function getInputBindings() {
 
-	// If the user picked the same button for both, swap the other one
-	if ( params.rotateButton === params.panButton ) {
+	const result = buildInputBindings( params.rotateButton, params.panButton, params.panModifier );
 
-		// Find a different button for whichever was NOT just changed
-		const buttons = [ 'left', 'middle', 'right' ];
-		const other = buttons.find( b => b !== params.rotateButton )!;
+	if ( result.resolvedModifier !== params.panModifier ) {
 
-		// Determine which one triggered the change by checking the active element
-		// lil-gui sets focus on the changed control's select element
-		const activeEl = document.activeElement;
-		const rotateSelect = rotateButtonCtrl.domElement.querySelector( 'select' );
-		if ( activeEl === rotateSelect ) {
-
-			params.panButton = other;
-			panButtonCtrl.updateDisplay();
-
-		} else {
-
-			params.rotateButton = other;
-			rotateButtonCtrl.updateDisplay();
-
-		}
+		params.panModifier = result.resolvedModifier;
+		panModifierCtrl.updateDisplay();
 
 	}
 
-	updateModifierVisibility();
-	applyControls();
-
-}
-
-function updateModifierVisibility(): void {
-
-	const sameButton = params.rotateButton === params.panButton;
-	panModifierCtrl.domElement.parentElement!.style.display = sameButton ? '' : 'none';
-
-}
-
-function buildInputBindings(): InputBindings {
-
-	const rotateBtn = buttonValues[ params.rotateButton ] as 0 | 1 | 2;
-	const panBtn = buttonValues[ params.panButton ] as 0 | 1 | 2;
-
-	if ( rotateBtn === panBtn ) {
-
-		return {
-			rotate: { button: rotateBtn },
-			pan: { button: panBtn, modifier: params.panModifier as ModifierKey },
-		} as InputBindings;
-
-	}
-
-	return {
-		rotate: { button: rotateBtn },
-		pan: { button: panBtn },
-	} as InputBindings;
+	return result.bindings;
 
 }
 
@@ -210,7 +165,7 @@ function applyControls(): void {
 	controls.enableDamping = params.enableDamping;
 	controls.dampingFactor = params.dampingFactor;
 	controls.pivot.set( params.pivotX, params.pivotY, params.pivotZ );
-	controls.inputBindings = buildInputBindings();
+	controls.inputBindings = getInputBindings();
 	controls.rotateSpeed = params.rotateSpeed;
 	controls.panSpeed = params.panSpeed;
 	controls.zoomSpeed = params.zoomSpeed;
@@ -242,5 +197,4 @@ function render(): void {
 }
 
 window.addEventListener( 'resize', onWindowResize );
-updateModifierVisibility();
 applyControls();

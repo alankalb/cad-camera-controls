@@ -13,10 +13,6 @@ import {
 	simulatePinch,
 } from './helpers';
 
-// ---------------------------------------------------------------------------
-// Construction & lifecycle
-// ---------------------------------------------------------------------------
-
 describe( 'construction and lifecycle', () => {
 
 	it( 'constructs with camera only, domElement is null', () => {
@@ -46,7 +42,7 @@ describe( 'construction and lifecycle', () => {
 
 		const camera = createCamera();
 		const element = createDomElement();
-		const controls = new CADCameraControls( camera ); // no element yet
+		const controls = new CADCameraControls( camera );
 		const spy = vi.spyOn( element, 'addEventListener' );
 
 		controls.connect( element );
@@ -64,7 +60,6 @@ describe( 'construction and lifecycle', () => {
 		controls.disconnect();
 		expect( removeSpy ).toHaveBeenCalled();
 
-		// Can reconnect
 		const addSpy = vi.spyOn( element, 'addEventListener' );
 		controls.connect();
 		expect( addSpy ).toHaveBeenCalled();
@@ -111,10 +106,6 @@ describe( 'construction and lifecycle', () => {
 	} );
 
 } );
-
-// ---------------------------------------------------------------------------
-// Rotation (left-drag by default)
-// ---------------------------------------------------------------------------
 
 describe( 'rotation', () => {
 
@@ -190,14 +181,12 @@ describe( 'rotation', () => {
 
 	it( 'larger rotateSpeed produces larger rotation', () => {
 
-		// Slow speed
 		const slow = createControls( { rotateSpeed: 0.001 } );
 		const slowInitial = slow.camera.position.clone();
 		simulateDrag( slow.element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
 		const slowDelta = slow.camera.position.distanceTo( slowInitial );
 		slow.controls.dispose();
 
-		// Fast speed
 		const fast = createControls( { rotateSpeed: 0.02 } );
 		const fastInitial = fast.camera.position.clone();
 		simulateDrag( fast.element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
@@ -209,10 +198,6 @@ describe( 'rotation', () => {
 	} );
 
 } );
-
-// ---------------------------------------------------------------------------
-// Pan (right-drag by default)
-// ---------------------------------------------------------------------------
 
 describe( 'pan', () => {
 
@@ -294,7 +279,6 @@ describe( 'pan', () => {
 		} );
 		const initialPos = camera.position.clone();
 
-		// ctrl should rotate (not pan) when pan modifier is 'alt'
 		simulateDrag( element, {
 			button: 2,
 			startX: 400, startY: 300,
@@ -303,12 +287,10 @@ describe( 'pan', () => {
 		} );
 		const afterCtrl = camera.position.clone();
 
-		// Reset camera
 		camera.position.set( 0, 0, 1000 );
 		camera.lookAt( 0, 0, 0 );
 		camera.updateMatrixWorld();
 
-		// alt should pan
 		simulateDrag( element, {
 			button: 2,
 			startX: 400, startY: 300,
@@ -316,7 +298,6 @@ describe( 'pan', () => {
 			altKey: true,
 		} );
 
-		// Both should have moved the camera
 		expect( afterCtrl.equals( initialPos ) ).toBe( false );
 		expect( camera.position.equals( initialPos ) ).toBe( false );
 		controls.dispose();
@@ -325,10 +306,6 @@ describe( 'pan', () => {
 
 } );
 
-// ---------------------------------------------------------------------------
-// Zoom / Dolly (wheel)
-// ---------------------------------------------------------------------------
-
 describe( 'zoom / dolly', () => {
 
 	it( 'wheel scroll moves camera closer to pivot', () => {
@@ -336,7 +313,6 @@ describe( 'zoom / dolly', () => {
 		const { controls, camera, element } = createControls();
 		const initialDistance = camera.position.distanceTo( controls.pivot );
 
-		// Negative deltaY = zoom in (toward pivot)
 		dispatchWheel( element, - 100 );
 
 		const finalDistance = camera.position.distanceTo( controls.pivot );
@@ -350,7 +326,6 @@ describe( 'zoom / dolly', () => {
 		const { controls, camera, element } = createControls();
 		const initialDistance = camera.position.distanceTo( controls.pivot );
 
-		// Positive deltaY = zoom out (away from pivot)
 		dispatchWheel( element, 100 );
 
 		const finalDistance = camera.position.distanceTo( controls.pivot );
@@ -363,7 +338,6 @@ describe( 'zoom / dolly', () => {
 
 		const { controls, camera, element } = createControls( { minDistance: 900 } );
 
-		// Try to zoom in a lot
 		for ( let i = 0; i < 50; i ++ ) {
 
 			dispatchWheel( element, - 200 );
@@ -371,7 +345,7 @@ describe( 'zoom / dolly', () => {
 		}
 
 		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeGreaterThanOrEqual( 900 - 1 ); // small float tolerance
+		expect( finalDistance ).toBeGreaterThanOrEqual( 900 - 1 );
 		controls.dispose();
 
 	} );
@@ -380,7 +354,6 @@ describe( 'zoom / dolly', () => {
 
 		const { controls, camera, element } = createControls( { maxDistance: 1200 } );
 
-		// Try to zoom out a lot
 		for ( let i = 0; i < 50; i ++ ) {
 
 			dispatchWheel( element, 200 );
@@ -388,7 +361,7 @@ describe( 'zoom / dolly', () => {
 		}
 
 		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeLessThanOrEqual( 1200 + 1 ); // small float tolerance
+		expect( finalDistance ).toBeLessThanOrEqual( 1200 + 1 );
 		controls.dispose();
 
 	} );
@@ -420,10 +393,6 @@ describe( 'zoom / dolly', () => {
 
 } );
 
-// ---------------------------------------------------------------------------
-// Damping / inertia (update)
-// ---------------------------------------------------------------------------
-
 describe( 'damping / inertia', () => {
 
 	it( 'update() returns false with no velocity', () => {
@@ -439,7 +408,6 @@ describe( 'damping / inertia', () => {
 
 		const { controls, element } = createControls( { enableDamping: false } );
 
-		// Build up some velocity via a drag
 		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
 
 		expect( controls.update( 1 / 60 ) ).toBe( false );
@@ -451,7 +419,6 @@ describe( 'damping / inertia', () => {
 
 		const { controls, element } = createControls();
 
-		// Build up some velocity via a drag
 		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
 		controls.enabled = false;
 
@@ -464,13 +431,11 @@ describe( 'damping / inertia', () => {
 
 		const { controls, element } = createControls();
 
-		// Start drag but don't release
 		dispatchPointer( element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 } );
 		dispatchPointer( element, 'pointermove', { button: 0, clientX: 500, clientY: 300 } );
 
 		expect( controls.update( 1 / 60 ) ).toBe( false );
 
-		// Clean up
 		dispatchPointer( element, 'pointerup', { button: 0, clientX: 500, clientY: 300 } );
 		controls.dispose();
 
@@ -480,12 +445,10 @@ describe( 'damping / inertia', () => {
 
 		const { controls, camera, element } = createControls();
 
-		// Drag to build velocity, then release
 		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300, steps: 3 } );
 
 		const posAfterDrag = camera.position.clone();
 
-		// Inertia should continue moving the camera
 		const changed = controls.update( 1 / 60 );
 		expect( changed ).toBe( true );
 		expect( camera.position.equals( posAfterDrag ) ).toBe( false );
@@ -499,17 +462,14 @@ describe( 'damping / inertia', () => {
 
 		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300, steps: 3 } );
 
-		// Measure movement from first update
 		const pos0 = camera.position.clone();
 		controls.update( 1 / 60 );
 		const delta1 = camera.position.distanceTo( pos0 );
 
-		// Measure movement from second update
 		const pos1 = camera.position.clone();
 		controls.update( 1 / 60 );
 		const delta2 = camera.position.distanceTo( pos1 );
 
-		// Second update should produce smaller movement (damping)
 		expect( delta2 ).toBeLessThan( delta1 );
 		controls.dispose();
 
@@ -517,11 +477,10 @@ describe( 'damping / inertia', () => {
 
 	it( 'velocity eventually stops (update returns false)', () => {
 
-		const { controls, element } = createControls( { dampingFactor: 0.5 } ); // faster decay
+		const { controls, element } = createControls( { dampingFactor: 0.5 } );
 
 		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 420, endY: 300, steps: 2 } );
 
-		// Run enough frames for velocity to decay below threshold
 		let lastResult = true;
 		for ( let i = 0; i < 200; i ++ ) {
 
@@ -537,10 +496,6 @@ describe( 'damping / inertia', () => {
 
 } );
 
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
-
 describe( 'configuration', () => {
 
 	it( 'inputBindings changes which buttons trigger rotation and pan', () => {
@@ -550,11 +505,9 @@ describe( 'configuration', () => {
 		} );
 		const initialPos = camera.position.clone();
 
-		// Left-click (button 0) should NOT rotate or pan
 		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
 		expect( camera.position.equals( initialPos ) ).toBe( true );
 
-		// Middle-click (button 1) SHOULD rotate
 		simulateDrag( element, { button: 1, startX: 400, startY: 300, endX: 500, endY: 300 } );
 		expect( camera.position.equals( initialPos ) ).toBe( false );
 		controls.dispose();
@@ -568,7 +521,6 @@ describe( 'configuration', () => {
 		} );
 		const initialQuat = camera.quaternion.clone();
 
-		// Right-drag (no modifier) should pan — quaternion stays constant
 		simulateDrag( element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 } );
 
 		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
@@ -603,10 +555,6 @@ describe( 'configuration', () => {
 
 } );
 
-// ---------------------------------------------------------------------------
-// Touch
-// ---------------------------------------------------------------------------
-
 describe( 'touch', () => {
 
 	it( 'single-finger drag rotates the camera', () => {
@@ -632,7 +580,6 @@ describe( 'touch', () => {
 
 		simulateTouchDrag( element, { startX: 400, startY: 300, endX: 500, endY: 350 } );
 
-		// Pan should not change quaternion
 		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
 		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
 		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
@@ -646,11 +593,9 @@ describe( 'touch', () => {
 		const { controls, camera, element } = createControls();
 		const initialQuat = camera.quaternion.clone();
 
-		// Two fingers: pointer 10 and 11, drag both rightward
 		dispatchTouch( element, 'pointerdown', { clientX: 350, clientY: 300, pointerId: 10 } );
 		dispatchTouch( element, 'pointerdown', { clientX: 450, clientY: 300, pointerId: 11 } );
 
-		// Move both fingers right
 		for ( let i = 1; i <= 5; i ++ ) {
 
 			dispatchTouch( element, 'pointermove', { clientX: 350 + i * 20, clientY: 300, pointerId: 10 } );
@@ -661,7 +606,6 @@ describe( 'touch', () => {
 		dispatchTouch( element, 'pointerup', { clientX: 450, clientY: 300, pointerId: 10 } );
 		dispatchTouch( element, 'pointerup', { clientX: 550, clientY: 300, pointerId: 11 } );
 
-		// Pan should not change quaternion
 		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
 		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
 		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
@@ -675,7 +619,6 @@ describe( 'touch', () => {
 		const { controls, camera, element } = createControls();
 		const initialDistance = camera.position.distanceTo( controls.pivot );
 
-		// Spread fingers apart = zoom in
 		simulatePinch( element, { startSpread: 100, endSpread: 300, steps: 5 } );
 
 		const finalDistance = camera.position.distanceTo( controls.pivot );
@@ -689,7 +632,6 @@ describe( 'touch', () => {
 		const { controls, camera, element } = createControls();
 		const initialDistance = camera.position.distanceTo( controls.pivot );
 
-		// Pinch fingers together = zoom out
 		simulatePinch( element, { startSpread: 300, endSpread: 100, steps: 5 } );
 
 		const finalDistance = camera.position.distanceTo( controls.pivot );
