@@ -100,7 +100,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this.enableDamping = true;
 		this.dampingFactor = 0.9;
 		this.pivot = new Vector3( 0, 0, 0 );
-		this.inputBindings = { rotate: { button: 2 }, pan: { button: 2, modifier: 'ctrl' } };
+		this.inputBindings = { rotate: { button: 0 }, pan: { button: 2 } };
 		this.touchBindings = { one: 'rotate', two: 'pan', pinch: true };
 		this.rotateSpeed = 0.005;
 		this.panSpeed = 0.0016;
