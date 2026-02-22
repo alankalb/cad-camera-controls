@@ -43,9 +43,27 @@ scene.add( cube );
 
 let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera = createPerspectiveCamera();
 
+const ORTHO_FRUSTUM = 1200;
+
 function createPerspectiveCamera(): THREE.PerspectiveCamera {
 
 	const cam = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.1, 200000 );
+	cam.position.set( 0, 0, 1200 );
+	return cam;
+
+}
+
+function createOrthographicCamera(): THREE.OrthographicCamera {
+
+	const aspect = window.innerWidth / window.innerHeight;
+	const cam = new THREE.OrthographicCamera(
+		- ORTHO_FRUSTUM * aspect / 2,
+		ORTHO_FRUSTUM * aspect / 2,
+		ORTHO_FRUSTUM / 2,
+		- ORTHO_FRUSTUM / 2,
+		0.1,
+		200000
+	);
 	cam.position.set( 0, 0, 1200 );
 	return cam;
 
@@ -71,6 +89,8 @@ const params = {
 	zoomSpeed: 0.005,
 	minDistance: 50,
 	maxDistance: 100000,
+	minZoom: 0.01,
+	maxZoom: 1000,
 	preventContextMenu: true,
 };
 
@@ -84,6 +104,10 @@ function switchCamera(): void {
 
 		camera = createPerspectiveCamera();
 
+	} else {
+
+		camera = createOrthographicCamera();
+
 	}
 
 	controls = new CADCameraControls( camera, renderer.domElement );
@@ -95,7 +119,7 @@ function switchCamera(): void {
 
 const gui = new GUI();
 
-gui.add( params, 'cameraType', [ 'Perspective' ] ).name( 'camera' ).onChange( switchCamera );
+gui.add( params, 'cameraType', [ 'Perspective', 'Orthographic' ] ).name( 'camera' ).onChange( switchCamera );
 gui.add( params, 'enabled' ).onChange( applyControls );
 gui.add( params, 'enableDamping' ).onChange( applyControls );
 gui.add( params, 'dampingFactor', 0.7, 0.99, 0.001 ).onChange( applyControls );
@@ -118,9 +142,11 @@ speedFolder.add( params, 'rotateSpeed', 0.0005, 0.02, 0.0001 ).onChange( applyCo
 speedFolder.add( params, 'panSpeed', 0.0001, 0.02, 0.0001 ).onChange( applyControls );
 speedFolder.add( params, 'zoomSpeed', 0.0001, 0.02, 0.0001 ).onChange( applyControls );
 
-const limitsFolder = gui.addFolder( 'distance limits' );
+const limitsFolder = gui.addFolder( 'limits' );
 limitsFolder.add( params, 'minDistance', 1, 10000, 1 ).onChange( applyControls );
 limitsFolder.add( params, 'maxDistance', 100, 200000, 10 ).onChange( applyControls );
+limitsFolder.add( params, 'minZoom', 0.001, 1, 0.001 ).onChange( applyControls );
+limitsFolder.add( params, 'maxZoom', 1, 2000, 1 ).onChange( applyControls );
 
 // Helpers
 
@@ -165,12 +191,15 @@ function applyControls(): void {
 	controls.enableDamping = params.enableDamping;
 	controls.dampingFactor = params.dampingFactor;
 	controls.pivot.set( params.pivotX, params.pivotY, params.pivotZ );
+	axes.position.copy( controls.pivot );
 	controls.inputBindings = getInputBindings();
 	controls.rotateSpeed = params.rotateSpeed;
 	controls.panSpeed = params.panSpeed;
 	controls.zoomSpeed = params.zoomSpeed;
 	controls.minDistance = Math.min( params.minDistance, params.maxDistance - 1 );
 	controls.maxDistance = Math.max( params.maxDistance, params.minDistance + 1 );
+	controls.minZoom = params.minZoom;
+	controls.maxZoom = params.maxZoom;
 	controls.preventContextMenu = params.preventContextMenu;
 	applyBindingsText();
 
@@ -178,9 +207,18 @@ function applyControls(): void {
 
 function onWindowResize(): void {
 
+	const aspect = window.innerWidth / window.innerHeight;
+
 	if ( camera instanceof THREE.PerspectiveCamera ) {
 
-		camera.aspect = window.innerWidth / window.innerHeight;
+		camera.aspect = aspect;
+
+	} else if ( camera instanceof THREE.OrthographicCamera ) {
+
+		camera.left = - ORTHO_FRUSTUM * aspect / 2;
+		camera.right = ORTHO_FRUSTUM * aspect / 2;
+		camera.top = ORTHO_FRUSTUM / 2;
+		camera.bottom = - ORTHO_FRUSTUM / 2;
 
 	}
 

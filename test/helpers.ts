@@ -1,4 +1,4 @@
-import { PerspectiveCamera } from 'three';
+import { PerspectiveCamera, OrthographicCamera } from 'three';
 import { CADCameraControls } from '../src/CADCameraControls';
 
 export function createCamera(): PerspectiveCamera {
@@ -33,10 +33,49 @@ export function createDomElement(): HTMLDivElement {
 export function createControls( overrides?: Partial<Pick<CADCameraControls,
 	'enabled' | 'enableDamping' | 'dampingFactor' | 'inputBindings' |
 	'touchBindings' | 'rotateSpeed' | 'panSpeed' | 'zoomSpeed' |
-	'minDistance' | 'maxDistance' | 'preventContextMenu'
+	'minDistance' | 'maxDistance' | 'minZoom' | 'maxZoom' | 'preventContextMenu'
 >> ): { controls: CADCameraControls; camera: PerspectiveCamera; element: HTMLDivElement } {
 
 	const camera = createCamera();
+	const element = createDomElement();
+	const controls = new CADCameraControls( camera, element );
+
+	if ( overrides ) {
+
+		Object.assign( controls, overrides );
+
+	}
+
+	return { controls, camera, element };
+
+}
+
+export function createOrthoCamera(): OrthographicCamera {
+
+	const aspect = 800 / 600;
+	const frustumSize = 1000;
+	const camera = new OrthographicCamera(
+		- frustumSize * aspect / 2,
+		frustumSize * aspect / 2,
+		frustumSize / 2,
+		- frustumSize / 2,
+		0.1,
+		200000
+	);
+	camera.position.set( 0, 0, 1000 );
+	camera.lookAt( 0, 0, 0 );
+	camera.updateMatrixWorld();
+	return camera;
+
+}
+
+export function createOrthoControls( overrides?: Partial<Pick<CADCameraControls,
+	'enabled' | 'enableDamping' | 'dampingFactor' | 'inputBindings' |
+	'touchBindings' | 'rotateSpeed' | 'panSpeed' | 'zoomSpeed' |
+	'minDistance' | 'maxDistance' | 'minZoom' | 'maxZoom' | 'preventContextMenu'
+>> ): { controls: CADCameraControls; camera: OrthographicCamera; element: HTMLDivElement } {
+
+	const camera = createOrthoCamera();
 	const element = createDomElement();
 	const controls = new CADCameraControls( camera, element );
 

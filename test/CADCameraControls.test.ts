@@ -5,6 +5,7 @@ import {
 	createCamera,
 	createDomElement,
 	createControls,
+	createOrthoControls,
 	dispatchPointer,
 	dispatchWheel,
 	simulateDrag,
@@ -100,6 +101,8 @@ describe( 'construction and lifecycle', () => {
 		expect( controls.zoomSpeed ).toBe( 0.0012 );
 		expect( controls.minDistance ).toBe( 50 );
 		expect( controls.maxDistance ).toBe( 100000 );
+		expect( controls.minZoom ).toBe( 0.01 );
+		expect( controls.maxZoom ).toBe( 1000 );
 		expect( controls.preventContextMenu ).toBe( true );
 		controls.dispose();
 
@@ -688,6 +691,210 @@ describe( 'touch', () => {
 
 		expect( startFn ).toHaveBeenCalledTimes( 1 );
 		expect( endFn ).toHaveBeenCalledTimes( 1 );
+		controls.dispose();
+
+	} );
+
+} );
+
+describe( 'orthographic rotation', () => {
+
+	it( 'drag rotates the ortho camera', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialQuat = camera.quaternion.clone();
+
+		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
+
+		expect( camera.quaternion.equals( initialQuat ) ).toBe( false );
+		controls.dispose();
+
+	} );
+
+	it( 'camera.zoom remains unchanged during rotation', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialZoom = camera.zoom;
+
+		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
+
+		expect( camera.zoom ).toBe( initialZoom );
+		controls.dispose();
+
+	} );
+
+} );
+
+describe( 'orthographic zoom', () => {
+
+	it( 'wheel scroll zooms in (increases camera.zoom)', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialZoom = camera.zoom;
+
+		dispatchWheel( element, - 100 );
+
+		expect( camera.zoom ).toBeGreaterThan( initialZoom );
+		controls.dispose();
+
+	} );
+
+	it( 'wheel scroll zooms out (decreases camera.zoom)', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialZoom = camera.zoom;
+
+		dispatchWheel( element, 100 );
+
+		expect( camera.zoom ).toBeLessThan( initialZoom );
+		controls.dispose();
+
+	} );
+
+	it( 'camera.zoom does not go below minZoom', () => {
+
+		const { controls, camera, element } = createOrthoControls( { minZoom: 0.5 } );
+
+		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, 200 );
+
+		expect( camera.zoom ).toBeGreaterThanOrEqual( 0.5 );
+		controls.dispose();
+
+	} );
+
+	it( 'camera.zoom does not exceed maxZoom', () => {
+
+		const { controls, camera, element } = createOrthoControls( { maxZoom: 5 } );
+
+		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 200 );
+
+		expect( camera.zoom ).toBeLessThanOrEqual( 5 );
+		controls.dispose();
+
+	} );
+
+	it( 'does not move camera along forward axis', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialZ = camera.position.z;
+
+		dispatchWheel( element, - 100, 400, 300 );
+
+		expect( camera.position.z ).toBeCloseTo( initialZ, 1 );
+		controls.dispose();
+
+	} );
+
+} );
+
+describe( 'orthographic pan', () => {
+
+	it( 'right-drag pans the ortho camera', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialPos = camera.position.clone();
+
+		simulateDrag( element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 } );
+
+		expect( camera.position.equals( initialPos ) ).toBe( false );
+		controls.dispose();
+
+	} );
+
+	it( 'camera quaternion stays constant during ortho pan', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialQuat = camera.quaternion.clone();
+
+		simulateDrag( element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 } );
+
+		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
+		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
+		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
+		expect( camera.quaternion.w ).toBeCloseTo( initialQuat.w, 10 );
+		controls.dispose();
+
+	} );
+
+	it( 'camera.zoom stays constant during ortho pan', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialZoom = camera.zoom;
+
+		simulateDrag( element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 } );
+
+		expect( camera.zoom ).toBe( initialZoom );
+		controls.dispose();
+
+	} );
+
+} );
+
+describe( 'orthographic touch', () => {
+
+	it( 'pinch zoom in increases camera.zoom', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialZoom = camera.zoom;
+
+		simulatePinch( element, { startSpread: 100, endSpread: 300, steps: 5 } );
+
+		expect( camera.zoom ).toBeGreaterThan( initialZoom );
+		controls.dispose();
+
+	} );
+
+	it( 'pinch zoom out decreases camera.zoom', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+		const initialZoom = camera.zoom;
+
+		simulatePinch( element, { startSpread: 300, endSpread: 100, steps: 5 } );
+
+		expect( camera.zoom ).toBeLessThan( initialZoom );
+		controls.dispose();
+
+	} );
+
+} );
+
+describe( 'orthographic damping', () => {
+
+	it( 'zoom velocity decays over successive updates', () => {
+
+		const { controls, camera, element } = createOrthoControls();
+
+		dispatchWheel( element, - 100 );
+
+		const zoom0 = camera.zoom;
+		controls.update( 1 / 60 );
+		const ratio1 = camera.zoom / zoom0;
+
+		const zoom1 = camera.zoom;
+		controls.update( 1 / 60 );
+		const ratio2 = camera.zoom / zoom1;
+
+		expect( Math.abs( ratio2 - 1 ) ).toBeLessThan( Math.abs( ratio1 - 1 ) );
+		controls.dispose();
+
+	} );
+
+	it( 'starting a drag clears zoom velocity', () => {
+
+		const { controls, camera, element } = createOrthoControls( { enableDamping: false } );
+
+		dispatchWheel( element, - 100 );
+		const zoomAfterWheel = camera.zoom;
+		expect( zoomAfterWheel ).toBeGreaterThan( 1 );
+
+		dispatchPointer( element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 } );
+		dispatchPointer( element, 'pointerup', { button: 0, clientX: 400, clientY: 300 } );
+
+		controls.enableDamping = true;
+		const zoomBefore = camera.zoom;
+		controls.update( 1 / 60 );
+
+		expect( camera.zoom ).toBeCloseTo( zoomBefore, 5 );
 		controls.dispose();
 
 	} );

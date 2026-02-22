@@ -23,6 +23,8 @@ export type CADCameraControlsR3FProps = {
   zoomSpeed?: number
   minDistance?: number
   maxDistance?: number
+  minZoom?: number
+  maxZoom?: number
   preventContextMenu?: boolean
 }
 
