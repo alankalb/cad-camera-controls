@@ -26,7 +26,8 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm ci --prefix examples
-      - run: npx --prefix examples vite build --base=/cad-camera-controls/
+      - run: npx vite build --base=/cad-camera-controls/
+        working-directory: examples
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
