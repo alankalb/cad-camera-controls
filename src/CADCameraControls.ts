@@ -159,6 +159,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		el.addEventListener( 'pointercancel', this._onPointerUp );
 		el.addEventListener( 'wheel', this._onWheel, { passive: false } );
 
+		el.style.touchAction = 'none';
+
 	}
 
 	disconnect(): void {
@@ -172,6 +174,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		el.removeEventListener( 'pointerup', this._onPointerUp );
 		el.removeEventListener( 'pointercancel', this._onPointerUp );
 		el.removeEventListener( 'wheel', this._onWheel );
+
+		el.style.touchAction = '';
 
 	}
 
@@ -305,6 +309,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 		if ( event.pointerType === 'touch' ) {
 
+			event.preventDefault();
 			this._onTouchStart( event );
 			return;
 
