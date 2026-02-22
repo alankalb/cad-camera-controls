@@ -24,6 +24,7 @@ button {
 
 canvas {
 	display: block;
+	touch-action: none;
 }
 
 #info {

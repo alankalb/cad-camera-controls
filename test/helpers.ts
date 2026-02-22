@@ -32,8 +32,8 @@ export function createDomElement(): HTMLDivElement {
 
 export function createControls( overrides?: Partial<Pick<CADCameraControls,
 	'enabled' | 'enableDamping' | 'dampingFactor' | 'inputBindings' |
-	'rotateSpeed' | 'panSpeed' | 'zoomSpeed' | 'minDistance' |
-	'maxDistance' | 'preventContextMenu'
+	'touchBindings' | 'rotateSpeed' | 'panSpeed' | 'zoomSpeed' |
+	'minDistance' | 'maxDistance' | 'preventContextMenu'
 >> ): { controls: CADCameraControls; camera: PerspectiveCamera; element: HTMLDivElement } {
 
 	const camera = createCamera();
@@ -138,5 +138,111 @@ export function simulateDrag(
 	}
 
 	dispatchPointer( element, 'pointerup', { button, clientX: endX, clientY: endY, ...modifiers } );
+
+}
+
+export function dispatchTouch(
+	element: HTMLElement,
+	type: string,
+	options: {
+		clientX?: number;
+		clientY?: number;
+		pointerId?: number;
+	} = {}
+): void {
+
+	element.dispatchEvent( new PointerEvent( type, {
+		bubbles: true,
+		cancelable: true,
+		button: 0,
+		clientX: options.clientX ?? 0,
+		clientY: options.clientY ?? 0,
+		pointerId: options.pointerId ?? 1,
+		pointerType: 'touch',
+	} ) );
+
+}
+
+export function simulateTouchDrag(
+	element: HTMLElement,
+	options: {
+		startX?: number;
+		startY?: number;
+		endX?: number;
+		endY?: number;
+		steps?: number;
+		pointerId?: number;
+	} = {}
+): void {
+
+	const startX = options.startX ?? 400;
+	const startY = options.startY ?? 300;
+	const endX = options.endX ?? 500;
+	const endY = options.endY ?? 350;
+	const steps = options.steps ?? 5;
+	const pointerId = options.pointerId ?? 1;
+
+	dispatchTouch( element, 'pointerdown', { clientX: startX, clientY: startY, pointerId } );
+
+	for ( let i = 1; i <= steps; i ++ ) {
+
+		const t = i / steps;
+		const x = startX + ( endX - startX ) * t;
+		const y = startY + ( endY - startY ) * t;
+		dispatchTouch( element, 'pointermove', { clientX: x, clientY: y, pointerId } );
+
+	}
+
+	dispatchTouch( element, 'pointerup', { clientX: endX, clientY: endY, pointerId } );
+
+}
+
+export function simulatePinch(
+	element: HTMLElement,
+	options: {
+		centerX?: number;
+		centerY?: number;
+		startSpread?: number;
+		endSpread?: number;
+		steps?: number;
+	} = {}
+): void {
+
+	const centerX = options.centerX ?? 400;
+	const centerY = options.centerY ?? 300;
+	const startSpread = options.startSpread ?? 100;
+	const endSpread = options.endSpread ?? 200;
+	const steps = options.steps ?? 5;
+
+	// Two fingers start at center ± half spread
+	const finger1Id = 10;
+	const finger2Id = 11;
+
+	dispatchTouch( element, 'pointerdown', {
+		clientX: centerX - startSpread / 2, clientY: centerY, pointerId: finger1Id,
+	} );
+	dispatchTouch( element, 'pointerdown', {
+		clientX: centerX + startSpread / 2, clientY: centerY, pointerId: finger2Id,
+	} );
+
+	for ( let i = 1; i <= steps; i ++ ) {
+
+		const t = i / steps;
+		const spread = startSpread + ( endSpread - startSpread ) * t;
+		dispatchTouch( element, 'pointermove', {
+			clientX: centerX - spread / 2, clientY: centerY, pointerId: finger1Id,
+		} );
+		dispatchTouch( element, 'pointermove', {
+			clientX: centerX + spread / 2, clientY: centerY, pointerId: finger2Id,
+		} );
+
+	}
+
+	dispatchTouch( element, 'pointerup', {
+		clientX: centerX - endSpread / 2, clientY: centerY, pointerId: finger1Id,
+	} );
+	dispatchTouch( element, 'pointerup', {
+		clientX: centerX + endSpread / 2, clientY: centerY, pointerId: finger2Id,
+	} );
 
 }

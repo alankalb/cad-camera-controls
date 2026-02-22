@@ -9,7 +9,7 @@ import {
 	Vector3,
 } from 'three';
 
-import type { ModifierKey, InputBindings, CADCameraControlsEventMap } from './types';
+import type { ModifierKey, InputBindings, TouchBindings, CADCameraControlsEventMap } from './types';
 
 const WORLD_UP = new Vector3( 0, 1, 0 );
 const CAMERA_RIGHT = new Vector3( 1, 0, 0 );
@@ -58,6 +58,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	dampingFactor: number;
 	pivot: Vector3;
 	inputBindings: InputBindings;
+	touchBindings: TouchBindings;
 	rotateSpeed: number;
 	panSpeed: number;
 	zoomSpeed: number;
@@ -85,6 +86,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	private _rotateVelocity: Vector2;
 	private _panVelocity: Vector2;
 	private _dollyVelocity: number;
+	private _pointers: PointerEvent[];
+	private _pinchDistance: number;
 
 	constructor( camera: PerspectiveCamera | OrthographicCamera, domElement?: HTMLElement ) {
 
@@ -98,6 +101,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this.dampingFactor = 0.9;
 		this.pivot = new Vector3( 0, 0, 0 );
 		this.inputBindings = { rotate: { button: 2 }, pan: { button: 2, modifier: 'ctrl' } };
+		this.touchBindings = { one: 'rotate', two: 'pan', pinch: true };
 		this.rotateSpeed = 0.005;
 		this.panSpeed = 0.0016;
 		this.zoomSpeed = 0.0012;
@@ -124,6 +128,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this._rotateVelocity = new Vector2();
 		this._panVelocity = new Vector2();
 		this._dollyVelocity = 0;
+		this._pointers = [];
+		this._pinchDistance = 0;
 
 		this._onContextMenu = this._onContextMenu.bind( this );
 		this._onPointerDown = this._onPointerDown.bind( this );
@@ -297,6 +303,13 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 		if ( ! this.enabled ) return;
 
+		if ( event.pointerType === 'touch' ) {
+
+			this._onTouchStart( event );
+			return;
+
+		}
+
 		const bindings = this.inputBindings;
 		const panHasModifier = 'modifier' in bindings.pan;
 		const panMode = event.button === bindings.pan.button
@@ -321,9 +334,48 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 	}
 
+	private _onTouchStart( event: PointerEvent ): void {
+
+		this._pointers.push( event );
+
+		if ( this.domElement ) {
+
+			this.domElement.setPointerCapture( event.pointerId );
+
+		}
+
+		if ( this._pointers.length === 1 ) {
+
+			this._drag.isDragging = true;
+			this._drag.mode = this.touchBindings.one;
+			this._drag.x = event.clientX;
+			this._drag.y = event.clientY;
+			this._rotateVelocity.set( 0, 0 );
+			this._panVelocity.set( 0, 0 );
+			this.dispatchEvent( _startEvent );
+
+		} else if ( this._pointers.length === 2 ) {
+
+			this._drag.mode = this.touchBindings.two;
+			this._drag.x = ( this._pointers[ 0 ].clientX + this._pointers[ 1 ].clientX ) * 0.5;
+			this._drag.y = ( this._pointers[ 0 ].clientY + this._pointers[ 1 ].clientY ) * 0.5;
+			this._pinchDistance = this._getPointerDistance();
+
+		}
+
+	}
+
 	private _onPointerMove( event: PointerEvent ): void {
 
 		if ( ! this.enabled ) return;
+
+		if ( event.pointerType === 'touch' ) {
+
+			this._onTouchMove( event );
+			return;
+
+		}
+
 		if ( ! this._drag.isDragging || ! this._drag.mode ) return;
 
 		const dx = event.clientX - this._drag.x;
@@ -345,7 +397,91 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 	}
 
+	private _onTouchMove( event: PointerEvent ): void {
+
+		// Update stored pointer
+		const index = this._pointers.findIndex( p => p.pointerId === event.pointerId );
+		if ( index === - 1 ) return;
+		this._pointers[ index ] = event;
+
+		if ( ! this._drag.isDragging || ! this._drag.mode ) return;
+
+		if ( this._pointers.length === 2 ) {
+
+			const midX = ( this._pointers[ 0 ].clientX + this._pointers[ 1 ].clientX ) * 0.5;
+			const midY = ( this._pointers[ 0 ].clientY + this._pointers[ 1 ].clientY ) * 0.5;
+			const dx = midX - this._drag.x;
+			const dy = midY - this._drag.y;
+			this._drag.x = midX;
+			this._drag.y = midY;
+
+			// Two-finger drag
+			if ( this._drag.mode === 'rotate' ) {
+
+				this._applyRotate( dx, dy );
+				this._rotateVelocity.set( dx, dy );
+
+			} else {
+
+				this._applyPan( dx, dy );
+				this._panVelocity.set( dx, dy );
+
+			}
+
+			// Pinch-to-zoom
+			if ( this.touchBindings.pinch ) {
+
+				const currentDistance = this._getPointerDistance();
+				const delta = currentDistance - this._pinchDistance;
+				this._pinchDistance = currentDistance;
+
+				const distance = this.camera.position.distanceTo( this.pivot );
+				const step = delta * this.zoomSpeed * Math.max( 1, distance * 0.25 );
+
+				// Use center of pinch as zoom target
+				const el = this.domElement!;
+				const rect = el.getBoundingClientRect();
+				this._wheelPointer.set(
+					( ( midX - rect.left ) / rect.width ) * 2 - 1,
+					- ( ( midY - rect.top ) / rect.height ) * 2 + 1
+				);
+
+				this._applyDolly( step, this._wheelPointer );
+				this._dollyVelocity = step;
+
+			}
+
+		} else if ( this._pointers.length === 1 ) {
+
+			const dx = event.clientX - this._drag.x;
+			const dy = event.clientY - this._drag.y;
+			this._drag.x = event.clientX;
+			this._drag.y = event.clientY;
+
+			if ( this._drag.mode === 'rotate' ) {
+
+				this._applyRotate( dx, dy );
+				this._rotateVelocity.set( dx, dy );
+
+			} else {
+
+				this._applyPan( dx, dy );
+				this._panVelocity.set( dx, dy );
+
+			}
+
+		}
+
+	}
+
 	private _onPointerUp( event: PointerEvent ): void {
+
+		if ( event.pointerType === 'touch' ) {
+
+			this._onTouchEnd( event );
+			return;
+
+		}
 
 		if ( event.button !== this.inputBindings.rotate.button && event.button !== this.inputBindings.pan.button ) return;
 
@@ -359,6 +495,42 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		}
 
 		this.dispatchEvent( _endEvent );
+
+	}
+
+	private _onTouchEnd( event: PointerEvent ): void {
+
+		const index = this._pointers.findIndex( p => p.pointerId === event.pointerId );
+		if ( index !== - 1 ) this._pointers.splice( index, 1 );
+
+		if ( this.domElement ) {
+
+			this.domElement.releasePointerCapture( event.pointerId );
+
+		}
+
+		if ( this._pointers.length === 0 ) {
+
+			this._drag.isDragging = false;
+			this._drag.mode = null;
+			this.dispatchEvent( _endEvent );
+
+		} else if ( this._pointers.length === 1 ) {
+
+			// Downgrade from two-finger to one-finger
+			this._drag.mode = this.touchBindings.one;
+			this._drag.x = this._pointers[ 0 ].clientX;
+			this._drag.y = this._pointers[ 0 ].clientY;
+
+		}
+
+	}
+
+	private _getPointerDistance(): number {
+
+		const dx = this._pointers[ 0 ].clientX - this._pointers[ 1 ].clientX;
+		const dy = this._pointers[ 0 ].clientY - this._pointers[ 1 ].clientY;
+		return Math.sqrt( dx * dx + dy * dy );
 
 	}
 
@@ -385,4 +557,4 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 }
 
 export { CADCameraControls };
-export type { InputBindings, MouseButton, ModifierKey } from './types';
+export type { InputBindings, TouchBindings, MouseButton, ModifierKey } from './types';

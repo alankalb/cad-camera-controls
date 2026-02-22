@@ -18,6 +18,12 @@ type DifferentButtonBindings =
 
 export type InputBindings = SameButtonBindings | DifferentButtonBindings;
 
+export type TouchBindings = {
+	one: 'rotate' | 'pan';
+	two: 'rotate' | 'pan';
+	pinch: boolean;
+};
+
 export type CADCameraControlsEventMap = {
 	change: {};
 	start: {};

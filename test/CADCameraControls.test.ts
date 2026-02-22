@@ -8,6 +8,9 @@ import {
 	dispatchPointer,
 	dispatchWheel,
 	simulateDrag,
+	dispatchTouch,
+	simulateTouchDrag,
+	simulatePinch,
 } from './helpers';
 
 // ---------------------------------------------------------------------------
@@ -91,6 +94,11 @@ describe( 'construction and lifecycle', () => {
 		expect( controls.inputBindings ).toEqual( {
 			rotate: { button: 2 },
 			pan: { button: 2, modifier: 'ctrl' },
+		} );
+		expect( controls.touchBindings ).toEqual( {
+			one: 'rotate',
+			two: 'pan',
+			pinch: true,
 		} );
 		expect( controls.rotateSpeed ).toBe( 0.005 );
 		expect( controls.panSpeed ).toBe( 0.0016 );
@@ -592,6 +600,134 @@ describe( 'configuration', () => {
 		element.dispatchEvent( event );
 
 		expect( event.defaultPrevented ).toBe( false );
+		controls.dispose();
+
+	} );
+
+} );
+
+// ---------------------------------------------------------------------------
+// Touch
+// ---------------------------------------------------------------------------
+
+describe( 'touch', () => {
+
+	it( 'single-finger drag rotates the camera', () => {
+
+		const { controls, camera, element } = createControls();
+		const initialPos = camera.position.clone();
+		const initialQuat = camera.quaternion.clone();
+
+		simulateTouchDrag( element, { startX: 400, startY: 300, endX: 500, endY: 300 } );
+
+		expect( camera.position.equals( initialPos ) ).toBe( false );
+		expect( camera.quaternion.equals( initialQuat ) ).toBe( false );
+		controls.dispose();
+
+	} );
+
+	it( 'single-finger drag pans when touchBindings.one = pan', () => {
+
+		const { controls, camera, element } = createControls( {
+			touchBindings: { one: 'pan', two: 'rotate', pinch: true },
+		} );
+		const initialQuat = camera.quaternion.clone();
+
+		simulateTouchDrag( element, { startX: 400, startY: 300, endX: 500, endY: 350 } );
+
+		// Pan should not change quaternion
+		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
+		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
+		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
+		expect( camera.quaternion.w ).toBeCloseTo( initialQuat.w, 10 );
+		controls.dispose();
+
+	} );
+
+	it( 'two-finger drag pans the camera', () => {
+
+		const { controls, camera, element } = createControls();
+		const initialQuat = camera.quaternion.clone();
+
+		// Two fingers: pointer 10 and 11, drag both rightward
+		dispatchTouch( element, 'pointerdown', { clientX: 350, clientY: 300, pointerId: 10 } );
+		dispatchTouch( element, 'pointerdown', { clientX: 450, clientY: 300, pointerId: 11 } );
+
+		// Move both fingers right
+		for ( let i = 1; i <= 5; i ++ ) {
+
+			dispatchTouch( element, 'pointermove', { clientX: 350 + i * 20, clientY: 300, pointerId: 10 } );
+			dispatchTouch( element, 'pointermove', { clientX: 450 + i * 20, clientY: 300, pointerId: 11 } );
+
+		}
+
+		dispatchTouch( element, 'pointerup', { clientX: 450, clientY: 300, pointerId: 10 } );
+		dispatchTouch( element, 'pointerup', { clientX: 550, clientY: 300, pointerId: 11 } );
+
+		// Pan should not change quaternion
+		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
+		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
+		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
+		expect( camera.quaternion.w ).toBeCloseTo( initialQuat.w, 10 );
+		controls.dispose();
+
+	} );
+
+	it( 'pinch zooms the camera closer', () => {
+
+		const { controls, camera, element } = createControls();
+		const initialDistance = camera.position.distanceTo( controls.pivot );
+
+		// Spread fingers apart = zoom in
+		simulatePinch( element, { startSpread: 100, endSpread: 300, steps: 5 } );
+
+		const finalDistance = camera.position.distanceTo( controls.pivot );
+		expect( finalDistance ).toBeLessThan( initialDistance );
+		controls.dispose();
+
+	} );
+
+	it( 'pinch zooms the camera farther', () => {
+
+		const { controls, camera, element } = createControls();
+		const initialDistance = camera.position.distanceTo( controls.pivot );
+
+		// Pinch fingers together = zoom out
+		simulatePinch( element, { startSpread: 300, endSpread: 100, steps: 5 } );
+
+		const finalDistance = camera.position.distanceTo( controls.pivot );
+		expect( finalDistance ).toBeGreaterThan( initialDistance );
+		controls.dispose();
+
+	} );
+
+	it( 'pinch disabled when touchBindings.pinch = false', () => {
+
+		const { controls, camera, element } = createControls( {
+			touchBindings: { one: 'rotate', two: 'pan', pinch: false },
+		} );
+		const initialDistance = camera.position.distanceTo( controls.pivot );
+
+		simulatePinch( element, { startSpread: 100, endSpread: 300, steps: 5 } );
+
+		const finalDistance = camera.position.distanceTo( controls.pivot );
+		expect( finalDistance ).toBeCloseTo( initialDistance, 0 );
+		controls.dispose();
+
+	} );
+
+	it( 'dispatches start and end events for touch', () => {
+
+		const { controls, element } = createControls();
+		const startFn = vi.fn();
+		const endFn = vi.fn();
+		controls.addEventListener( 'start', startFn );
+		controls.addEventListener( 'end', endFn );
+
+		simulateTouchDrag( element, { startX: 400, startY: 300, endX: 500, endY: 300 } );
+
+		expect( startFn ).toHaveBeenCalledTimes( 1 );
+		expect( endFn ).toHaveBeenCalledTimes( 1 );
 		controls.dispose();
 
 	} );
