@@ -15,13 +15,11 @@ export function buildInputBindings(
 	panButton: ButtonLabel,
 	panModifier: ModifierLabel,
 ): BuildResult {
-
-	const rotateBtn = buttonValues[ rotateButton ];
-	const panBtn = buttonValues[ panButton ];
+	const rotateBtn = buttonValues[rotateButton];
+	const panBtn = buttonValues[panButton];
 	const modifier = panModifier === 'none' ? undefined : panModifier as ModifierKey;
 
-	if ( rotateBtn === panBtn ) {
-
+	if (rotateBtn === panBtn) {
 		const resolved = modifier ?? 'ctrl';
 		return {
 			bindings: {
@@ -30,11 +28,9 @@ export function buildInputBindings(
 			} as InputBindings,
 			resolvedModifier: resolved,
 		};
-
 	}
 
-	if ( modifier ) {
-
+	if (modifier) {
 		return {
 			bindings: {
 				rotate: { button: rotateBtn },
@@ -42,7 +38,6 @@ export function buildInputBindings(
 			} as InputBindings,
 			resolvedModifier: panModifier,
 		};
-
 	}
 
 	return {
@@ -52,5 +47,4 @@ export function buildInputBindings(
 		} as InputBindings,
 		resolvedModifier: 'none',
 	};
-
 }

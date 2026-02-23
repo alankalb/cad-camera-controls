@@ -1,50 +1,46 @@
-import { extend, useThree, useFrame, type ThreeElement } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
-import { CADCameraControls } from './CADCameraControls'
-import type { InputBindings, TouchBindings, ZoomMode } from './types'
+import { extend, useThree, useFrame, type ThreeElement } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
+import { CADCameraControls } from './CADCameraControls';
+import type { InputBindings, TouchBindings, ZoomMode } from './types';
 
-extend( { CADCameraControls } )
+extend({ CADCameraControls });
 
 declare module '@react-three/fiber' {
-  interface ThreeElements {
-    cadCameraControls: ThreeElement<typeof CADCameraControls>
-  }
+	interface ThreeElements {
+		cadCameraControls: ThreeElement<typeof CADCameraControls>
+	}
 }
 
 export type CADCameraControlsR3FProps = {
-  enabled?: boolean
-  enableDamping?: boolean
-  dampingFactor?: number
-  pivot?: [number, number, number]
-  inputBindings?: InputBindings
-  touchBindings?: TouchBindings
-  rotateSpeed?: number
-  panSpeed?: number
-  zoomSpeed?: number
-  minDistance?: number
-  maxDistance?: number
-  minZoom?: number
-  maxZoom?: number
-  zoomMode?: ZoomMode
-  minFov?: number
-  maxFov?: number
-  preventContextMenu?: boolean
-}
+	enabled?: boolean
+	enableDamping?: boolean
+	dampingFactor?: number
+	pivot?: [number, number, number]
+	inputBindings?: InputBindings
+	touchBindings?: TouchBindings
+	rotateSpeed?: number
+	panSpeed?: number
+	zoomSpeed?: number
+	minDistance?: number
+	maxDistance?: number
+	minZoom?: number
+	maxZoom?: number
+	zoomMode?: ZoomMode
+	minFov?: number
+	maxFov?: number
+	preventContextMenu?: boolean
+};
 
-export function CADCameraControlsR3F( props: CADCameraControlsR3FProps ) {
+export function CADCameraControlsR3F(props: CADCameraControlsR3FProps) {
+	const { camera, gl } = useThree();
+	const ref = useRef<CADCameraControls>(null!);
 
-  const { camera, gl } = useThree()
-  const ref = useRef<CADCameraControls>( null! )
+	useEffect(() => {
+		ref.current.connect(gl.domElement);
+		return () => ref.current.dispose();
+	}, [gl.domElement]);
 
-  useEffect( () => {
+	useFrame((_, delta) => ref.current.update(delta));
 
-    ref.current.connect( gl.domElement )
-    return () => ref.current.dispose()
-
-  }, [ gl.domElement ] )
-
-  useFrame( ( _, delta ) => ref.current.update( delta ) )
-
-  return <cadCameraControls ref={ref} args={[ camera ]} {...props} />
-
+	return <cadCameraControls ref={ref} args={[camera]} {...props} />;
 }

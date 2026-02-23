@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Vector3, Quaternion } from 'three';
+import { describe, it, expect, vi } from 'vitest';
+import { Vector3 } from 'three';
 import { CADCameraControls } from '../src/CADCameraControls';
 import {
 	createCamera,
@@ -14,1142 +14,962 @@ import {
 	simulatePinch,
 } from './helpers';
 
-describe( 'construction and lifecycle', () => {
-
-	it( 'constructs with camera only, domElement is null', () => {
-
+describe('construction and lifecycle', () => {
+	it('constructs with camera only, domElement is null', () => {
 		const camera = createCamera();
-		const controls = new CADCameraControls( camera );
-		expect( controls.camera ).toBe( camera );
-		expect( controls.domElement ).toBeNull();
+		const controls = new CADCameraControls(camera);
+		expect(controls.camera).toBe(camera);
+		expect(controls.domElement).toBeNull();
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'constructs with camera + domElement, auto-connects', () => {
-
+	it('constructs with camera + domElement, auto-connects', () => {
 		const camera = createCamera();
 		const element = createDomElement();
-		const spy = vi.spyOn( element, 'addEventListener' );
-		const controls = new CADCameraControls( camera, element );
+		const spy = vi.spyOn(element, 'addEventListener');
+		const controls = new CADCameraControls(camera, element);
 
-		expect( controls.domElement ).toBe( element );
-		expect( spy ).toHaveBeenCalled();
+		expect(controls.domElement).toBe(element);
+		expect(spy).toHaveBeenCalled();
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'connect() attaches listeners to domElement', () => {
-
+	it('connect() attaches listeners to domElement', () => {
 		const camera = createCamera();
 		const element = createDomElement();
-		const controls = new CADCameraControls( camera );
-		const spy = vi.spyOn( element, 'addEventListener' );
+		const controls = new CADCameraControls(camera);
+		const spy = vi.spyOn(element, 'addEventListener');
 
-		controls.connect( element );
-		expect( spy ).toHaveBeenCalled();
-		expect( controls.domElement ).toBe( element );
+		controls.connect(element);
+		expect(spy).toHaveBeenCalled();
+		expect(controls.domElement).toBe(element);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'disconnect() removes listeners, can reconnect', () => {
-
+	it('disconnect() removes listeners, can reconnect', () => {
 		const { controls, element } = createControls();
-		const removeSpy = vi.spyOn( element, 'removeEventListener' );
+		const removeSpy = vi.spyOn(element, 'removeEventListener');
 
 		controls.disconnect();
-		expect( removeSpy ).toHaveBeenCalled();
+		expect(removeSpy).toHaveBeenCalled();
 
-		const addSpy = vi.spyOn( element, 'addEventListener' );
+		const addSpy = vi.spyOn(element, 'addEventListener');
 		controls.connect();
-		expect( addSpy ).toHaveBeenCalled();
+		expect(addSpy).toHaveBeenCalled();
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'dispose() disconnects', () => {
-
+	it('dispose() disconnects', () => {
 		const { controls, element } = createControls();
-		const removeSpy = vi.spyOn( element, 'removeEventListener' );
+		const removeSpy = vi.spyOn(element, 'removeEventListener');
 
 		controls.dispose();
-		expect( removeSpy ).toHaveBeenCalled();
+		expect(removeSpy).toHaveBeenCalled();
+	});
 
-	} );
-
-	it( 'has correct default property values', () => {
-
+	it('has correct default property values', () => {
 		const camera = createCamera();
-		const controls = new CADCameraControls( camera );
+		const controls = new CADCameraControls(camera);
 
-		expect( controls.enabled ).toBe( true );
-		expect( controls.enableDamping ).toBe( true );
-		expect( controls.dampingFactor ).toBe( 0.9 );
-		expect( controls.pivot.equals( new Vector3( 0, 0, 0 ) ) ).toBe( true );
-		expect( controls.inputBindings ).toEqual( {
+		expect(controls.enabled).toBe(true);
+		expect(controls.enableDamping).toBe(true);
+		expect(controls.dampingFactor).toBe(0.9);
+		expect(controls.pivot.equals(new Vector3(0, 0, 0))).toBe(true);
+		expect(controls.inputBindings).toEqual({
 			rotate: { button: 0 },
 			pan: { button: 2 },
-		} );
-		expect( controls.touchBindings ).toEqual( {
+		});
+		expect(controls.touchBindings).toEqual({
 			one: 'rotate',
 			two: 'pan',
 			pinch: true,
-		} );
-		expect( controls.rotateSpeed ).toBe( 0.005 );
-		expect( controls.panSpeed ).toBe( 0.0016 );
-		expect( controls.zoomSpeed ).toBe( 0.0012 );
-		expect( controls.minDistance ).toBe( 50 );
-		expect( controls.maxDistance ).toBe( 100000 );
-		expect( controls.minZoom ).toBe( 0.01 );
-		expect( controls.maxZoom ).toBe( 1000 );
-		expect( controls.zoomMode ).toBe( 'dolly' );
-		expect( controls.minFov ).toBe( 1 );
-		expect( controls.maxFov ).toBe( 120 );
-		expect( controls.preventContextMenu ).toBe( true );
+		});
+		expect(controls.rotateSpeed).toBe(0.005);
+		expect(controls.panSpeed).toBe(0.0016);
+		expect(controls.zoomSpeed).toBe(0.0012);
+		expect(controls.minDistance).toBe(50);
+		expect(controls.maxDistance).toBe(100000);
+		expect(controls.minZoom).toBe(0.01);
+		expect(controls.maxZoom).toBe(1000);
+		expect(controls.zoomMode).toBe('dolly');
+		expect(controls.minFov).toBe(1);
+		expect(controls.maxFov).toBe(120);
+		expect(controls.preventContextMenu).toBe(true);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'rotation', () => {
-
-	it( 'left-drag rotates the camera', () => {
-
+describe('rotation', () => {
+	it('left-drag rotates the camera', () => {
 		const { controls, camera, element } = createControls();
 		const initialPos = camera.position.clone();
 		const initialQuat = camera.quaternion.clone();
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 });
 
-		expect( camera.position.equals( initialPos ) ).toBe( false );
-		expect( camera.quaternion.equals( initialQuat ) ).toBe( false );
+		expect(camera.position.equals(initialPos)).toBe(false);
+		expect(camera.quaternion.equals(initialQuat)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'camera distance from pivot stays constant during rotation', () => {
-
+	it('camera distance from pivot stays constant during rotation', () => {
 		const { controls, camera, element } = createControls();
-		const initialDistance = camera.position.distanceTo( controls.pivot );
+		const initialDistance = camera.position.distanceTo(controls.pivot);
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 350 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 350 });
 
-		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeCloseTo( initialDistance, 5 );
+		const finalDistance = camera.position.distanceTo(controls.pivot);
+		expect(finalDistance).toBeCloseTo(initialDistance, 5);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'pivot position remains unchanged after rotation', () => {
-
+	it('pivot position remains unchanged after rotation', () => {
 		const { controls, element } = createControls();
 		const pivotBefore = controls.pivot.clone();
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 350 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 350 });
 
-		expect( controls.pivot.equals( pivotBefore ) ).toBe( true );
+		expect(controls.pivot.equals(pivotBefore)).toBe(true);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'dispatches start, change, end events during rotation', () => {
-
+	it('dispatches start, change, end events during rotation', () => {
 		const { controls, element } = createControls();
 		const startFn = vi.fn();
 		const changeFn = vi.fn();
 		const endFn = vi.fn();
-		controls.addEventListener( 'start', startFn );
-		controls.addEventListener( 'change', changeFn );
-		controls.addEventListener( 'end', endFn );
+		controls.addEventListener('start', startFn);
+		controls.addEventListener('change', changeFn);
+		controls.addEventListener('end', endFn);
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300, steps: 3 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300, steps: 3 });
 
-		expect( startFn ).toHaveBeenCalledTimes( 1 );
-		expect( changeFn.mock.calls.length ).toBeGreaterThanOrEqual( 1 );
-		expect( endFn ).toHaveBeenCalledTimes( 1 );
+		expect(startFn).toHaveBeenCalledTimes(1);
+		expect(changeFn.mock.calls.length).toBeGreaterThanOrEqual(1);
+		expect(endFn).toHaveBeenCalledTimes(1);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'does not rotate when enabled = false', () => {
-
-		const { controls, camera, element } = createControls( { enabled: false } );
+	it('does not rotate when enabled = false', () => {
+		const { controls, camera, element } = createControls({ enabled: false });
 		const initialPos = camera.position.clone();
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 });
 
-		expect( camera.position.equals( initialPos ) ).toBe( true );
+		expect(camera.position.equals(initialPos)).toBe(true);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'larger rotateSpeed produces larger rotation', () => {
-
-		const slow = createControls( { rotateSpeed: 0.001 } );
+	it('larger rotateSpeed produces larger rotation', () => {
+		const slow = createControls({ rotateSpeed: 0.001 });
 		const slowInitial = slow.camera.position.clone();
-		simulateDrag( slow.element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
-		const slowDelta = slow.camera.position.distanceTo( slowInitial );
+		simulateDrag(slow.element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 });
+		const slowDelta = slow.camera.position.distanceTo(slowInitial);
 		slow.controls.dispose();
 
-		const fast = createControls( { rotateSpeed: 0.02 } );
+		const fast = createControls({ rotateSpeed: 0.02 });
 		const fastInitial = fast.camera.position.clone();
-		simulateDrag( fast.element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
-		const fastDelta = fast.camera.position.distanceTo( fastInitial );
+		simulateDrag(fast.element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 });
+		const fastDelta = fast.camera.position.distanceTo(fastInitial);
 		fast.controls.dispose();
 
-		expect( fastDelta ).toBeGreaterThan( slowDelta );
+		expect(fastDelta).toBeGreaterThan(slowDelta);
+	});
+});
 
-	} );
-
-} );
-
-describe( 'pan', () => {
-
-	it( 'right-drag pans the camera', () => {
-
+describe('pan', () => {
+	it('right-drag pans the camera', () => {
 		const { controls, camera, element } = createControls();
 		const initialPos = camera.position.clone();
 
-		simulateDrag( element, {
+		simulateDrag(element, {
 			button: 2,
 			startX: 400, startY: 300,
 			endX: 500, endY: 350,
-		} );
+		});
 
-		expect( camera.position.equals( initialPos ) ).toBe( false );
+		expect(camera.position.equals(initialPos)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'camera quaternion stays constant during pan', () => {
-
+	it('camera quaternion stays constant during pan', () => {
 		const { controls, camera, element } = createControls();
 		const initialQuat = camera.quaternion.clone();
 
-		simulateDrag( element, {
+		simulateDrag(element, {
 			button: 2,
 			startX: 400, startY: 300,
 			endX: 500, endY: 350,
-		} );
+		});
 
-		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
-		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
-		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
-		expect( camera.quaternion.w ).toBeCloseTo( initialQuat.w, 10 );
+		expect(camera.quaternion.x).toBeCloseTo(initialQuat.x, 10);
+		expect(camera.quaternion.y).toBeCloseTo(initialQuat.y, 10);
+		expect(camera.quaternion.z).toBeCloseTo(initialQuat.z, 10);
+		expect(camera.quaternion.w).toBeCloseTo(initialQuat.w, 10);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'dispatches change events during pan', () => {
-
+	it('dispatches change events during pan', () => {
 		const { controls, element } = createControls();
 		const changeFn = vi.fn();
-		controls.addEventListener( 'change', changeFn );
+		controls.addEventListener('change', changeFn);
 
-		simulateDrag( element, {
+		simulateDrag(element, {
 			button: 2,
 			startX: 400, startY: 300,
 			endX: 500, endY: 350,
 			steps: 3,
-		} );
+		});
 
-		expect( changeFn.mock.calls.length ).toBeGreaterThanOrEqual( 1 );
+		expect(changeFn.mock.calls.length).toBeGreaterThanOrEqual(1);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'larger panSpeed produces larger translation', () => {
-
-		const slow = createControls( { panSpeed: 0.0004 } );
+	it('larger panSpeed produces larger translation', () => {
+		const slow = createControls({ panSpeed: 0.0004 });
 		const slowInitial = slow.camera.position.clone();
-		simulateDrag( slow.element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 300 } );
-		const slowDelta = slow.camera.position.distanceTo( slowInitial );
+		simulateDrag(slow.element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 300 });
+		const slowDelta = slow.camera.position.distanceTo(slowInitial);
 		slow.controls.dispose();
 
-		const fast = createControls( { panSpeed: 0.008 } );
+		const fast = createControls({ panSpeed: 0.008 });
 		const fastInitial = fast.camera.position.clone();
-		simulateDrag( fast.element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 300 } );
-		const fastDelta = fast.camera.position.distanceTo( fastInitial );
+		simulateDrag(fast.element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 300 });
+		const fastDelta = fast.camera.position.distanceTo(fastInitial);
 		fast.controls.dispose();
 
-		expect( fastDelta ).toBeGreaterThan( slowDelta );
+		expect(fastDelta).toBeGreaterThan(slowDelta);
+	});
 
-	} );
-
-	it( 'respects pan modifier setting on same-button bindings', () => {
-
-		const { controls, camera, element } = createControls( {
+	it('respects pan modifier setting on same-button bindings', () => {
+		const { controls, camera, element } = createControls({
 			inputBindings: { rotate: { button: 2 }, pan: { button: 2, modifier: 'alt' } },
-		} );
+		});
 		const initialPos = camera.position.clone();
 
-		simulateDrag( element, {
+		simulateDrag(element, {
 			button: 2,
 			startX: 400, startY: 300,
 			endX: 500, endY: 300,
 			ctrlKey: true,
-		} );
+		});
 		const afterCtrl = camera.position.clone();
 
-		camera.position.set( 0, 0, 1000 );
-		camera.lookAt( 0, 0, 0 );
+		camera.position.set(0, 0, 1000);
+		camera.lookAt(0, 0, 0);
 		camera.updateMatrixWorld();
 
-		simulateDrag( element, {
+		simulateDrag(element, {
 			button: 2,
 			startX: 400, startY: 300,
 			endX: 500, endY: 300,
 			altKey: true,
-		} );
+		});
 
-		expect( afterCtrl.equals( initialPos ) ).toBe( false );
-		expect( camera.position.equals( initialPos ) ).toBe( false );
+		expect(afterCtrl.equals(initialPos)).toBe(false);
+		expect(camera.position.equals(initialPos)).toBe(false);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'zoom / dolly', () => {
-
-	it( 'wheel scroll moves camera closer to pivot', () => {
-
+describe('zoom / dolly', () => {
+	it('wheel scroll moves camera closer to pivot', () => {
 		const { controls, camera, element } = createControls();
-		const initialDistance = camera.position.distanceTo( controls.pivot );
+		const initialDistance = camera.position.distanceTo(controls.pivot);
 
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 
-		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeLessThan( initialDistance );
+		const finalDistance = camera.position.distanceTo(controls.pivot);
+		expect(finalDistance).toBeLessThan(initialDistance);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'wheel scroll moves camera away from pivot', () => {
-
+	it('wheel scroll moves camera away from pivot', () => {
 		const { controls, camera, element } = createControls();
-		const initialDistance = camera.position.distanceTo( controls.pivot );
+		const initialDistance = camera.position.distanceTo(controls.pivot);
 
-		dispatchWheel( element, 100 );
+		dispatchWheel(element, 100);
 
-		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeGreaterThan( initialDistance );
+		const finalDistance = camera.position.distanceTo(controls.pivot);
+		expect(finalDistance).toBeGreaterThan(initialDistance);
 		controls.dispose();
+	});
 
-	} );
+	it('minDistance clamping prevents getting closer than minimum', () => {
+		const { controls, camera, element } = createControls({ minDistance: 900 });
 
-	it( 'minDistance clamping prevents getting closer than minimum', () => {
-
-		const { controls, camera, element } = createControls( { minDistance: 900 } );
-
-		for ( let i = 0; i < 50; i ++ ) {
-
-			dispatchWheel( element, - 200 );
-
+		for (let i = 0; i < 50; i ++) {
+			dispatchWheel(element, - 200);
 		}
 
-		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeGreaterThanOrEqual( 900 - 1 );
+		const finalDistance = camera.position.distanceTo(controls.pivot);
+		expect(finalDistance).toBeGreaterThanOrEqual(900 - 1);
 		controls.dispose();
+	});
 
-	} );
+	it('maxDistance clamping prevents getting farther than maximum', () => {
+		const { controls, camera, element } = createControls({ maxDistance: 1200 });
 
-	it( 'maxDistance clamping prevents getting farther than maximum', () => {
-
-		const { controls, camera, element } = createControls( { maxDistance: 1200 } );
-
-		for ( let i = 0; i < 50; i ++ ) {
-
-			dispatchWheel( element, 200 );
-
+		for (let i = 0; i < 50; i ++) {
+			dispatchWheel(element, 200);
 		}
 
-		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeLessThanOrEqual( 1200 + 1 );
+		const finalDistance = camera.position.distanceTo(controls.pivot);
+		expect(finalDistance).toBeLessThanOrEqual(1200 + 1);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'dispatches change event on wheel', () => {
-
+	it('dispatches change event on wheel', () => {
 		const { controls, element } = createControls();
 		const changeFn = vi.fn();
-		controls.addEventListener( 'change', changeFn );
+		controls.addEventListener('change', changeFn);
 
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 
-		expect( changeFn ).toHaveBeenCalled();
+		expect(changeFn).toHaveBeenCalled();
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'does not zoom when enabled = false', () => {
-
-		const { controls, camera, element } = createControls( { enabled: false } );
+	it('does not zoom when enabled = false', () => {
+		const { controls, camera, element } = createControls({ enabled: false });
 		const initialPos = camera.position.clone();
 
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 
-		expect( camera.position.equals( initialPos ) ).toBe( true );
+		expect(camera.position.equals(initialPos)).toBe(true);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'damping / inertia', () => {
-
-	it( 'update() returns false with no velocity', () => {
-
+describe('damping / inertia', () => {
+	it('update() returns false with no velocity', () => {
 		const { controls } = createControls();
 
-		expect( controls.update( 1 / 60 ) ).toBe( false );
+		expect(controls.update(1 / 60)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
+	it('update() returns false when enableDamping = false', () => {
+		const { controls, element } = createControls({ enableDamping: false });
 
-	it( 'update() returns false when enableDamping = false', () => {
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 });
 
-		const { controls, element } = createControls( { enableDamping: false } );
-
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
-
-		expect( controls.update( 1 / 60 ) ).toBe( false );
+		expect(controls.update(1 / 60)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'update() returns false when enabled = false', () => {
-
+	it('update() returns false when enabled = false', () => {
 		const { controls, element } = createControls();
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 });
 		controls.enabled = false;
 
-		expect( controls.update( 1 / 60 ) ).toBe( false );
+		expect(controls.update(1 / 60)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'update() returns false while dragging', () => {
-
+	it('update() returns false while dragging', () => {
 		const { controls, element } = createControls();
 
-		dispatchPointer( element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 } );
-		dispatchPointer( element, 'pointermove', { button: 0, clientX: 500, clientY: 300 } );
+		dispatchPointer(element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 });
+		dispatchPointer(element, 'pointermove', { button: 0, clientX: 500, clientY: 300 });
 
-		expect( controls.update( 1 / 60 ) ).toBe( false );
+		expect(controls.update(1 / 60)).toBe(false);
 
-		dispatchPointer( element, 'pointerup', { button: 0, clientX: 500, clientY: 300 } );
+		dispatchPointer(element, 'pointerup', { button: 0, clientX: 500, clientY: 300 });
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'after drag release, update() returns true and moves camera (inertia)', () => {
-
+	it('after drag release, update() returns true and moves camera (inertia)', () => {
 		const { controls, camera, element } = createControls();
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300, steps: 3 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300, steps: 3 });
 
 		const posAfterDrag = camera.position.clone();
 
-		const changed = controls.update( 1 / 60 );
-		expect( changed ).toBe( true );
-		expect( camera.position.equals( posAfterDrag ) ).toBe( false );
+		const changed = controls.update(1 / 60);
+		expect(changed).toBe(true);
+		expect(camera.position.equals(posAfterDrag)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'velocity decays over successive update() calls', () => {
-
+	it('velocity decays over successive update() calls', () => {
 		const { controls, camera, element } = createControls();
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300, steps: 3 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300, steps: 3 });
 
 		const pos0 = camera.position.clone();
-		controls.update( 1 / 60 );
-		const delta1 = camera.position.distanceTo( pos0 );
+		controls.update(1 / 60);
+		const delta1 = camera.position.distanceTo(pos0);
 
 		const pos1 = camera.position.clone();
-		controls.update( 1 / 60 );
-		const delta2 = camera.position.distanceTo( pos1 );
+		controls.update(1 / 60);
+		const delta2 = camera.position.distanceTo(pos1);
 
-		expect( delta2 ).toBeLessThan( delta1 );
+		expect(delta2).toBeLessThan(delta1);
 		controls.dispose();
+	});
 
-	} );
+	it('velocity eventually stops (update returns false)', () => {
+		const { controls, element } = createControls({ dampingFactor: 0.5 });
 
-	it( 'velocity eventually stops (update returns false)', () => {
-
-		const { controls, element } = createControls( { dampingFactor: 0.5 } );
-
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 420, endY: 300, steps: 2 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 420, endY: 300, steps: 2 });
 
 		let lastResult = true;
-		for ( let i = 0; i < 200; i ++ ) {
-
-			lastResult = controls.update( 1 / 60 );
-			if ( ! lastResult ) break;
-
+		for (let i = 0; i < 200; i ++) {
+			lastResult = controls.update(1 / 60);
+			if (! lastResult) break;
 		}
 
-		expect( lastResult ).toBe( false );
+		expect(lastResult).toBe(false);
 		controls.dispose();
+	});
 
-	} );
+	it('starting a drag clears dolly velocity from a prior wheel zoom', () => {
+		const { controls, camera, element } = createControls({ enableDamping: false });
 
-	it( 'starting a drag clears dolly velocity from a prior wheel zoom', () => {
+		dispatchWheel(element, - 100);
+		const distanceAfterWheel = camera.position.distanceTo(controls.pivot);
+		expect(distanceAfterWheel).toBeLessThan(1000);
 
-		const { controls, camera, element } = createControls( { enableDamping: false } );
-
-		dispatchWheel( element, - 100 );
-		const distanceAfterWheel = camera.position.distanceTo( controls.pivot );
-		expect( distanceAfterWheel ).toBeLessThan( 1000 );
-
-		dispatchPointer( element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 } );
-		dispatchPointer( element, 'pointerup', { button: 0, clientX: 400, clientY: 300 } );
+		dispatchPointer(element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 });
+		dispatchPointer(element, 'pointerup', { button: 0, clientX: 400, clientY: 300 });
 
 		controls.enableDamping = true;
-		const distanceBefore = camera.position.distanceTo( controls.pivot );
-		controls.update( 1 / 60 );
-		const distanceAfter = camera.position.distanceTo( controls.pivot );
+		const distanceBefore = camera.position.distanceTo(controls.pivot);
+		controls.update(1 / 60);
+		const distanceAfter = camera.position.distanceTo(controls.pivot);
 
-		expect( distanceAfter ).toBeCloseTo( distanceBefore, 5 );
+		expect(distanceAfter).toBeCloseTo(distanceBefore, 5);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'configuration', () => {
-
-	it( 'inputBindings changes which buttons trigger rotation and pan', () => {
-
-		const { controls, camera, element } = createControls( {
+describe('configuration', () => {
+	it('inputBindings changes which buttons trigger rotation and pan', () => {
+		const { controls, camera, element } = createControls({
 			inputBindings: { rotate: { button: 1 }, pan: { button: 2 } },
-		} );
+		});
 		const initialPos = camera.position.clone();
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
-		expect( camera.position.equals( initialPos ) ).toBe( true );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 });
+		expect(camera.position.equals(initialPos)).toBe(true);
 
-		simulateDrag( element, { button: 1, startX: 400, startY: 300, endX: 500, endY: 300 } );
-		expect( camera.position.equals( initialPos ) ).toBe( false );
+		simulateDrag(element, { button: 1, startX: 400, startY: 300, endX: 500, endY: 300 });
+		expect(camera.position.equals(initialPos)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'pan works without modifier when buttons differ', () => {
-
-		const { controls, camera, element } = createControls( {
+	it('pan works without modifier when buttons differ', () => {
+		const { controls, camera, element } = createControls({
 			inputBindings: { rotate: { button: 0 }, pan: { button: 2 } },
-		} );
+		});
 		const initialQuat = camera.quaternion.clone();
 
-		simulateDrag( element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 } );
+		simulateDrag(element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 });
 
-		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
-		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
-		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
-		expect( camera.quaternion.w ).toBeCloseTo( initialQuat.w, 10 );
+		expect(camera.quaternion.x).toBeCloseTo(initialQuat.x, 10);
+		expect(camera.quaternion.y).toBeCloseTo(initialQuat.y, 10);
+		expect(camera.quaternion.z).toBeCloseTo(initialQuat.z, 10);
+		expect(camera.quaternion.w).toBeCloseTo(initialQuat.w, 10);
 		controls.dispose();
+	});
 
-	} );
+	it('preventContextMenu blocks context menu', () => {
+		const { controls, element } = createControls({ preventContextMenu: true });
+		const event = new Event('contextmenu', { cancelable: true });
+		element.dispatchEvent(event);
 
-	it( 'preventContextMenu blocks context menu', () => {
-
-		const { controls, element } = createControls( { preventContextMenu: true } );
-		const event = new Event( 'contextmenu', { cancelable: true } );
-		element.dispatchEvent( event );
-
-		expect( event.defaultPrevented ).toBe( true );
+		expect(event.defaultPrevented).toBe(true);
 		controls.dispose();
+	});
 
-	} );
+	it('preventContextMenu = false allows context menu', () => {
+		const { controls, element } = createControls({ preventContextMenu: false });
+		const event = new Event('contextmenu', { cancelable: true });
+		element.dispatchEvent(event);
 
-	it( 'preventContextMenu = false allows context menu', () => {
-
-		const { controls, element } = createControls( { preventContextMenu: false } );
-		const event = new Event( 'contextmenu', { cancelable: true } );
-		element.dispatchEvent( event );
-
-		expect( event.defaultPrevented ).toBe( false );
+		expect(event.defaultPrevented).toBe(false);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'touch', () => {
-
-	it( 'single-finger drag rotates the camera', () => {
-
+describe('touch', () => {
+	it('single-finger drag rotates the camera', () => {
 		const { controls, camera, element } = createControls();
 		const initialPos = camera.position.clone();
 		const initialQuat = camera.quaternion.clone();
 
-		simulateTouchDrag( element, { startX: 400, startY: 300, endX: 500, endY: 300 } );
+		simulateTouchDrag(element, { startX: 400, startY: 300, endX: 500, endY: 300 });
 
-		expect( camera.position.equals( initialPos ) ).toBe( false );
-		expect( camera.quaternion.equals( initialQuat ) ).toBe( false );
+		expect(camera.position.equals(initialPos)).toBe(false);
+		expect(camera.quaternion.equals(initialQuat)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'single-finger drag pans when touchBindings.one = pan', () => {
-
-		const { controls, camera, element } = createControls( {
+	it('single-finger drag pans when touchBindings.one = pan', () => {
+		const { controls, camera, element } = createControls({
 			touchBindings: { one: 'pan', two: 'rotate', pinch: true },
-		} );
+		});
 		const initialQuat = camera.quaternion.clone();
 
-		simulateTouchDrag( element, { startX: 400, startY: 300, endX: 500, endY: 350 } );
+		simulateTouchDrag(element, { startX: 400, startY: 300, endX: 500, endY: 350 });
 
-		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
-		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
-		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
-		expect( camera.quaternion.w ).toBeCloseTo( initialQuat.w, 10 );
+		expect(camera.quaternion.x).toBeCloseTo(initialQuat.x, 10);
+		expect(camera.quaternion.y).toBeCloseTo(initialQuat.y, 10);
+		expect(camera.quaternion.z).toBeCloseTo(initialQuat.z, 10);
+		expect(camera.quaternion.w).toBeCloseTo(initialQuat.w, 10);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'two-finger drag pans the camera', () => {
-
+	it('two-finger drag pans the camera', () => {
 		const { controls, camera, element } = createControls();
 		const initialQuat = camera.quaternion.clone();
 
-		dispatchTouch( element, 'pointerdown', { clientX: 350, clientY: 300, pointerId: 10 } );
-		dispatchTouch( element, 'pointerdown', { clientX: 450, clientY: 300, pointerId: 11 } );
+		dispatchTouch(element, 'pointerdown', { clientX: 350, clientY: 300, pointerId: 10 });
+		dispatchTouch(element, 'pointerdown', { clientX: 450, clientY: 300, pointerId: 11 });
 
-		for ( let i = 1; i <= 5; i ++ ) {
-
-			dispatchTouch( element, 'pointermove', { clientX: 350 + i * 20, clientY: 300, pointerId: 10 } );
-			dispatchTouch( element, 'pointermove', { clientX: 450 + i * 20, clientY: 300, pointerId: 11 } );
-
+		for (let i = 1; i <= 5; i ++) {
+			dispatchTouch(element, 'pointermove', { clientX: 350 + i * 20, clientY: 300, pointerId: 10 });
+			dispatchTouch(element, 'pointermove', { clientX: 450 + i * 20, clientY: 300, pointerId: 11 });
 		}
 
-		dispatchTouch( element, 'pointerup', { clientX: 450, clientY: 300, pointerId: 10 } );
-		dispatchTouch( element, 'pointerup', { clientX: 550, clientY: 300, pointerId: 11 } );
+		dispatchTouch(element, 'pointerup', { clientX: 450, clientY: 300, pointerId: 10 });
+		dispatchTouch(element, 'pointerup', { clientX: 550, clientY: 300, pointerId: 11 });
 
-		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
-		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
-		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
-		expect( camera.quaternion.w ).toBeCloseTo( initialQuat.w, 10 );
+		expect(camera.quaternion.x).toBeCloseTo(initialQuat.x, 10);
+		expect(camera.quaternion.y).toBeCloseTo(initialQuat.y, 10);
+		expect(camera.quaternion.z).toBeCloseTo(initialQuat.z, 10);
+		expect(camera.quaternion.w).toBeCloseTo(initialQuat.w, 10);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'pinch zooms the camera closer', () => {
-
+	it('pinch zooms the camera closer', () => {
 		const { controls, camera, element } = createControls();
-		const initialDistance = camera.position.distanceTo( controls.pivot );
+		const initialDistance = camera.position.distanceTo(controls.pivot);
 
-		simulatePinch( element, { startSpread: 100, endSpread: 300, steps: 5 } );
+		simulatePinch(element, { startSpread: 100, endSpread: 300, steps: 5 });
 
-		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeLessThan( initialDistance );
+		const finalDistance = camera.position.distanceTo(controls.pivot);
+		expect(finalDistance).toBeLessThan(initialDistance);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'pinch zooms the camera farther', () => {
-
+	it('pinch zooms the camera farther', () => {
 		const { controls, camera, element } = createControls();
-		const initialDistance = camera.position.distanceTo( controls.pivot );
+		const initialDistance = camera.position.distanceTo(controls.pivot);
 
-		simulatePinch( element, { startSpread: 300, endSpread: 100, steps: 5 } );
+		simulatePinch(element, { startSpread: 300, endSpread: 100, steps: 5 });
 
-		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeGreaterThan( initialDistance );
+		const finalDistance = camera.position.distanceTo(controls.pivot);
+		expect(finalDistance).toBeGreaterThan(initialDistance);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'pinch disabled when touchBindings.pinch = false', () => {
-
-		const { controls, camera, element } = createControls( {
+	it('pinch disabled when touchBindings.pinch = false', () => {
+		const { controls, camera, element } = createControls({
 			touchBindings: { one: 'rotate', two: 'pan', pinch: false },
-		} );
-		const initialDistance = camera.position.distanceTo( controls.pivot );
+		});
+		const initialDistance = camera.position.distanceTo(controls.pivot);
 
-		simulatePinch( element, { startSpread: 100, endSpread: 300, steps: 5 } );
+		simulatePinch(element, { startSpread: 100, endSpread: 300, steps: 5 });
 
-		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeCloseTo( initialDistance, 0 );
+		const finalDistance = camera.position.distanceTo(controls.pivot);
+		expect(finalDistance).toBeCloseTo(initialDistance, 0);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'dispatches start and end events for touch', () => {
-
+	it('dispatches start and end events for touch', () => {
 		const { controls, element } = createControls();
 		const startFn = vi.fn();
 		const endFn = vi.fn();
-		controls.addEventListener( 'start', startFn );
-		controls.addEventListener( 'end', endFn );
+		controls.addEventListener('start', startFn);
+		controls.addEventListener('end', endFn);
 
-		simulateTouchDrag( element, { startX: 400, startY: 300, endX: 500, endY: 300 } );
+		simulateTouchDrag(element, { startX: 400, startY: 300, endX: 500, endY: 300 });
 
-		expect( startFn ).toHaveBeenCalledTimes( 1 );
-		expect( endFn ).toHaveBeenCalledTimes( 1 );
+		expect(startFn).toHaveBeenCalledTimes(1);
+		expect(endFn).toHaveBeenCalledTimes(1);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'orthographic rotation', () => {
-
-	it( 'drag rotates the ortho camera', () => {
-
+describe('orthographic rotation', () => {
+	it('drag rotates the ortho camera', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialQuat = camera.quaternion.clone();
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 });
 
-		expect( camera.quaternion.equals( initialQuat ) ).toBe( false );
+		expect(camera.quaternion.equals(initialQuat)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'camera.zoom remains unchanged during rotation', () => {
-
+	it('camera.zoom remains unchanged during rotation', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialZoom = camera.zoom;
 
-		simulateDrag( element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 } );
+		simulateDrag(element, { button: 0, startX: 400, startY: 300, endX: 500, endY: 300 });
 
-		expect( camera.zoom ).toBe( initialZoom );
+		expect(camera.zoom).toBe(initialZoom);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'orthographic zoom', () => {
-
-	it( 'wheel scroll zooms in (increases camera.zoom)', () => {
-
+describe('orthographic zoom', () => {
+	it('wheel scroll zooms in (increases camera.zoom)', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialZoom = camera.zoom;
 
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 
-		expect( camera.zoom ).toBeGreaterThan( initialZoom );
+		expect(camera.zoom).toBeGreaterThan(initialZoom);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'wheel scroll zooms out (decreases camera.zoom)', () => {
-
+	it('wheel scroll zooms out (decreases camera.zoom)', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialZoom = camera.zoom;
 
-		dispatchWheel( element, 100 );
+		dispatchWheel(element, 100);
 
-		expect( camera.zoom ).toBeLessThan( initialZoom );
+		expect(camera.zoom).toBeLessThan(initialZoom);
 		controls.dispose();
+	});
 
-	} );
+	it('camera.zoom does not go below minZoom', () => {
+		const { controls, camera, element } = createOrthoControls({ minZoom: 0.5 });
 
-	it( 'camera.zoom does not go below minZoom', () => {
+		for (let i = 0; i < 100; i ++) dispatchWheel(element, 200);
 
-		const { controls, camera, element } = createOrthoControls( { minZoom: 0.5 } );
-
-		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, 200 );
-
-		expect( camera.zoom ).toBeGreaterThanOrEqual( 0.5 );
+		expect(camera.zoom).toBeGreaterThanOrEqual(0.5);
 		controls.dispose();
+	});
 
-	} );
+	it('camera.zoom does not exceed maxZoom', () => {
+		const { controls, camera, element } = createOrthoControls({ maxZoom: 5 });
 
-	it( 'camera.zoom does not exceed maxZoom', () => {
+		for (let i = 0; i < 100; i ++) dispatchWheel(element, - 200);
 
-		const { controls, camera, element } = createOrthoControls( { maxZoom: 5 } );
-
-		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 200 );
-
-		expect( camera.zoom ).toBeLessThanOrEqual( 5 );
+		expect(camera.zoom).toBeLessThanOrEqual(5);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'does not move camera along forward axis', () => {
-
+	it('does not move camera along forward axis', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialZ = camera.position.z;
 
-		dispatchWheel( element, - 100, 400, 300 );
+		dispatchWheel(element, - 100, 400, 300);
 
-		expect( camera.position.z ).toBeCloseTo( initialZ, 1 );
+		expect(camera.position.z).toBeCloseTo(initialZ, 1);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'orthographic pan', () => {
-
-	it( 'right-drag pans the ortho camera', () => {
-
+describe('orthographic pan', () => {
+	it('right-drag pans the ortho camera', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialPos = camera.position.clone();
 
-		simulateDrag( element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 } );
+		simulateDrag(element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 });
 
-		expect( camera.position.equals( initialPos ) ).toBe( false );
+		expect(camera.position.equals(initialPos)).toBe(false);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'camera quaternion stays constant during ortho pan', () => {
-
+	it('camera quaternion stays constant during ortho pan', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialQuat = camera.quaternion.clone();
 
-		simulateDrag( element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 } );
+		simulateDrag(element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 });
 
-		expect( camera.quaternion.x ).toBeCloseTo( initialQuat.x, 10 );
-		expect( camera.quaternion.y ).toBeCloseTo( initialQuat.y, 10 );
-		expect( camera.quaternion.z ).toBeCloseTo( initialQuat.z, 10 );
-		expect( camera.quaternion.w ).toBeCloseTo( initialQuat.w, 10 );
+		expect(camera.quaternion.x).toBeCloseTo(initialQuat.x, 10);
+		expect(camera.quaternion.y).toBeCloseTo(initialQuat.y, 10);
+		expect(camera.quaternion.z).toBeCloseTo(initialQuat.z, 10);
+		expect(camera.quaternion.w).toBeCloseTo(initialQuat.w, 10);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'camera.zoom stays constant during ortho pan', () => {
-
+	it('camera.zoom stays constant during ortho pan', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialZoom = camera.zoom;
 
-		simulateDrag( element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 } );
+		simulateDrag(element, { button: 2, startX: 400, startY: 300, endX: 500, endY: 350 });
 
-		expect( camera.zoom ).toBe( initialZoom );
+		expect(camera.zoom).toBe(initialZoom);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'orthographic touch', () => {
-
-	it( 'pinch zoom in increases camera.zoom', () => {
-
+describe('orthographic touch', () => {
+	it('pinch zoom in increases camera.zoom', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialZoom = camera.zoom;
 
-		simulatePinch( element, { startSpread: 100, endSpread: 300, steps: 5 } );
+		simulatePinch(element, { startSpread: 100, endSpread: 300, steps: 5 });
 
-		expect( camera.zoom ).toBeGreaterThan( initialZoom );
+		expect(camera.zoom).toBeGreaterThan(initialZoom);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'pinch zoom out decreases camera.zoom', () => {
-
+	it('pinch zoom out decreases camera.zoom', () => {
 		const { controls, camera, element } = createOrthoControls();
 		const initialZoom = camera.zoom;
 
-		simulatePinch( element, { startSpread: 300, endSpread: 100, steps: 5 } );
+		simulatePinch(element, { startSpread: 300, endSpread: 100, steps: 5 });
 
-		expect( camera.zoom ).toBeLessThan( initialZoom );
+		expect(camera.zoom).toBeLessThan(initialZoom);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'orthographic damping', () => {
-
-	it( 'zoom velocity decays over successive updates', () => {
-
+describe('orthographic damping', () => {
+	it('zoom velocity decays over successive updates', () => {
 		const { controls, camera, element } = createOrthoControls();
 
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 
 		const zoom0 = camera.zoom;
-		controls.update( 1 / 60 );
+		controls.update(1 / 60);
 		const ratio1 = camera.zoom / zoom0;
 
 		const zoom1 = camera.zoom;
-		controls.update( 1 / 60 );
+		controls.update(1 / 60);
 		const ratio2 = camera.zoom / zoom1;
 
-		expect( Math.abs( ratio2 - 1 ) ).toBeLessThan( Math.abs( ratio1 - 1 ) );
+		expect(Math.abs(ratio2 - 1)).toBeLessThan(Math.abs(ratio1 - 1));
 		controls.dispose();
+	});
 
-	} );
+	it('starting a drag clears zoom velocity', () => {
+		const { controls, camera, element } = createOrthoControls({ enableDamping: false });
 
-	it( 'starting a drag clears zoom velocity', () => {
-
-		const { controls, camera, element } = createOrthoControls( { enableDamping: false } );
-
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 		const zoomAfterWheel = camera.zoom;
-		expect( zoomAfterWheel ).toBeGreaterThan( 1 );
+		expect(zoomAfterWheel).toBeGreaterThan(1);
 
-		dispatchPointer( element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 } );
-		dispatchPointer( element, 'pointerup', { button: 0, clientX: 400, clientY: 300 } );
+		dispatchPointer(element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 });
+		dispatchPointer(element, 'pointerup', { button: 0, clientX: 400, clientY: 300 });
 
 		controls.enableDamping = true;
 		const zoomBefore = camera.zoom;
-		controls.update( 1 / 60 );
+		controls.update(1 / 60);
 
-		expect( camera.zoom ).toBeCloseTo( zoomBefore, 5 );
+		expect(camera.zoom).toBeCloseTo(zoomBefore, 5);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'fov zoom', () => {
-
-	it( 'wheel scroll in fov mode decreases camera.fov (zoom in)', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
+describe('fov zoom', () => {
+	it('wheel scroll in fov mode decreases camera.fov (zoom in)', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'fov' });
 		const initialFov = camera.fov;
 
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 
-		expect( camera.fov ).toBeLessThan( initialFov );
+		expect(camera.fov).toBeLessThan(initialFov);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'wheel scroll in fov mode increases camera.fov (zoom out)', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
+	it('wheel scroll in fov mode increases camera.fov (zoom out)', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'fov' });
 		const initialFov = camera.fov;
 
-		dispatchWheel( element, 100 );
+		dispatchWheel(element, 100);
 
-		expect( camera.fov ).toBeGreaterThan( initialFov );
+		expect(camera.fov).toBeGreaterThan(initialFov);
 		controls.dispose();
+	});
 
-	} );
+	it('camera distance from pivot stays approximately constant during fov zoom', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'fov' });
+		const initialDistance = camera.position.distanceTo(controls.pivot);
 
-	it( 'camera distance from pivot stays approximately constant during fov zoom', () => {
+		dispatchWheel(element, - 100, 400, 300);
 
-		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
-		const initialDistance = camera.position.distanceTo( controls.pivot );
-
-		dispatchWheel( element, - 100, 400, 300 );
-
-		const finalDistance = camera.position.distanceTo( controls.pivot );
-		expect( finalDistance ).toBeCloseTo( initialDistance, 0 );
+		const finalDistance = camera.position.distanceTo(controls.pivot);
+		expect(finalDistance).toBeCloseTo(initialDistance, 0);
 		controls.dispose();
+	});
 
-	} );
+	it('minFov clamping prevents fov from going below minimum', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'fov', minFov: 10 });
 
-	it( 'minFov clamping prevents fov from going below minimum', () => {
+		for (let i = 0; i < 100; i ++) dispatchWheel(element, - 200);
 
-		const { controls, camera, element } = createControls( { zoomMode: 'fov', minFov: 10 } );
-
-		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 200 );
-
-		expect( camera.fov ).toBeGreaterThanOrEqual( 10 );
+		expect(camera.fov).toBeGreaterThanOrEqual(10);
 		controls.dispose();
+	});
 
-	} );
+	it('maxFov clamping prevents fov from exceeding maximum', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'fov', maxFov: 80 });
 
-	it( 'maxFov clamping prevents fov from exceeding maximum', () => {
+		for (let i = 0; i < 100; i ++) dispatchWheel(element, 200);
 
-		const { controls, camera, element } = createControls( { zoomMode: 'fov', maxFov: 80 } );
-
-		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, 200 );
-
-		expect( camera.fov ).toBeLessThanOrEqual( 80 );
+		expect(camera.fov).toBeLessThanOrEqual(80);
 		controls.dispose();
+	});
 
-	} );
+	it('fov velocity decays with damping', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'fov' });
 
-	it( 'fov velocity decays with damping', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
-
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 
 		const fov0 = camera.fov;
-		controls.update( 1 / 60 );
+		controls.update(1 / 60);
 		const ratio1 = camera.fov / fov0;
 
 		const fov1 = camera.fov;
-		controls.update( 1 / 60 );
+		controls.update(1 / 60);
 		const ratio2 = camera.fov / fov1;
 
-		expect( Math.abs( ratio2 - 1 ) ).toBeLessThan( Math.abs( ratio1 - 1 ) );
+		expect(Math.abs(ratio2 - 1)).toBeLessThan(Math.abs(ratio1 - 1));
 		controls.dispose();
+	});
 
-	} );
+	it('starting a drag clears fov velocity', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'fov', enableDamping: false });
 
-	it( 'starting a drag clears fov velocity', () => {
+		dispatchWheel(element, - 100);
+		expect(camera.fov).toBeLessThan(50);
 
-		const { controls, camera, element } = createControls( { zoomMode: 'fov', enableDamping: false } );
-
-		dispatchWheel( element, - 100 );
-		expect( camera.fov ).toBeLessThan( 50 );
-
-		dispatchPointer( element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 } );
-		dispatchPointer( element, 'pointerup', { button: 0, clientX: 400, clientY: 300 } );
+		dispatchPointer(element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 });
+		dispatchPointer(element, 'pointerup', { button: 0, clientX: 400, clientY: 300 });
 
 		controls.enableDamping = true;
 		const fovBefore = camera.fov;
-		controls.update( 1 / 60 );
+		controls.update(1 / 60);
 
-		expect( camera.fov ).toBeCloseTo( fovBefore, 5 );
+		expect(camera.fov).toBeCloseTo(fovBefore, 5);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'pinch zoom changes fov in touch mode', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
+	it('pinch zoom changes fov in touch mode', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'fov' });
 		const initialFov = camera.fov;
 
-		simulatePinch( element, { startSpread: 100, endSpread: 300, steps: 5 } );
+		simulatePinch(element, { startSpread: 100, endSpread: 300, steps: 5 });
 
-		expect( camera.fov ).toBeLessThan( initialFov );
+		expect(camera.fov).toBeLessThan(initialFov);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'dolly mode is unaffected by zoomMode setting (default behavior)', () => {
-
+	it('dolly mode is unaffected by zoomMode setting (default behavior)', () => {
 		const { controls, camera, element } = createControls();
 		const initialFov = camera.fov;
-		const initialDistance = camera.position.distanceTo( controls.pivot );
+		const initialDistance = camera.position.distanceTo(controls.pivot);
 
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 
-		expect( camera.fov ).toBe( initialFov );
-		expect( camera.position.distanceTo( controls.pivot ) ).toBeLessThan( initialDistance );
+		expect(camera.fov).toBe(initialFov);
+		expect(camera.position.distanceTo(controls.pivot)).toBeLessThan(initialDistance);
 		controls.dispose();
+	});
+});
 
-	} );
-
-} );
-
-describe( 'auto zoom', () => {
-
-	it( 'dollies normally when far from minDistance', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 200 } );
-		const initialDistance = camera.position.distanceTo( controls.pivot );
+describe('auto zoom', () => {
+	it('dollies normally when far from minDistance', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'auto', minDistance: 200 });
+		const initialDistance = camera.position.distanceTo(controls.pivot);
 		const initialFov = camera.fov;
 
-		dispatchWheel( element, - 100 );
+		dispatchWheel(element, - 100);
 
-		expect( camera.position.distanceTo( controls.pivot ) ).toBeLessThan( initialDistance );
-		expect( camera.fov ).toBe( initialFov );
+		expect(camera.position.distanceTo(controls.pivot)).toBeLessThan(initialDistance);
+		expect(camera.fov).toBe(initialFov);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'switches to FOV zoom after hitting minDistance', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 100 } );
+	it('switches to FOV zoom after hitting minDistance', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'auto', minDistance: 100 });
 		const initialFov = camera.fov;
 
-		dispatchWheel( element, - 10 );
+		dispatchWheel(element, - 10);
 
-		expect( camera.fov ).toBe( initialFov );
-		expect( camera.position.distanceTo( controls.pivot ) ).toBeLessThan( 1000 );
+		expect(camera.fov).toBe(initialFov);
+		expect(camera.position.distanceTo(controls.pivot)).toBeLessThan(1000);
 
-		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+		for (let i = 0; i < 100; i ++) dispatchWheel(element, - 100);
 
-		expect( camera.fov ).toBeLessThan( initialFov );
+		expect(camera.fov).toBeLessThan(initialFov);
 		controls.dispose();
+	});
 
-	} );
+	it('camera distance stays at minDistance during FOV zoom phase', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'auto', minDistance: 950 });
 
-	it( 'camera distance stays at minDistance during FOV zoom phase', () => {
+		for (let i = 0; i < 100; i ++) dispatchWheel(element, - 100);
 
-		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+		const distanceAtMin = camera.position.distanceTo(controls.pivot);
 
-		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+		for (let i = 0; i < 10; i ++) dispatchWheel(element, - 100);
 
-		const distanceAtMin = camera.position.distanceTo( controls.pivot );
-
-		for ( let i = 0; i < 10; i ++ ) dispatchWheel( element, - 100 );
-
-		const distanceAfterFov = camera.position.distanceTo( controls.pivot );
-		expect( distanceAfterFov ).toBeCloseTo( distanceAtMin, 0 );
+		const distanceAfterFov = camera.position.distanceTo(controls.pivot);
+		expect(distanceAfterFov).toBeCloseTo(distanceAtMin, 0);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'zoom-out widens FOV before increasing distance', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+	it('zoom-out widens FOV before increasing distance', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'auto', minDistance: 950 });
 		const baseFov = camera.fov;
 
-		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+		for (let i = 0; i < 100; i ++) dispatchWheel(element, - 100);
 
 		const narrowedFov = camera.fov;
-		expect( narrowedFov ).toBeLessThan( baseFov );
+		expect(narrowedFov).toBeLessThan(baseFov);
 
-		for ( let i = 0; i < 3; i ++ ) dispatchWheel( element, 100 );
+		for (let i = 0; i < 3; i ++) dispatchWheel(element, 100);
 
-		expect( camera.fov ).toBeGreaterThan( narrowedFov );
+		expect(camera.fov).toBeGreaterThan(narrowedFov);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'FOV does not exceed baseFov during zoom-out', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+	it('FOV does not exceed baseFov during zoom-out', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'auto', minDistance: 950 });
 		const baseFov = camera.fov;
 
-		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+		for (let i = 0; i < 100; i ++) dispatchWheel(element, - 100);
 
-		for ( let i = 0; i < 200; i ++ ) dispatchWheel( element, 100 );
+		for (let i = 0; i < 200; i ++) dispatchWheel(element, 100);
 
-		expect( camera.fov ).toBeLessThanOrEqual( baseFov + 0.1 );
+		expect(camera.fov).toBeLessThanOrEqual(baseFov + 0.1);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'resumes dollying outward once FOV is restored', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+	it('resumes dollying outward once FOV is restored', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'auto', minDistance: 950 });
 		const baseFov = camera.fov;
 
-		for ( let i = 0; i < 10; i ++ ) dispatchWheel( element, - 50 );
+		for (let i = 0; i < 10; i ++) dispatchWheel(element, - 50);
 
 		const narrowedFov = camera.fov;
-		expect( narrowedFov ).toBeLessThan( baseFov );
+		expect(narrowedFov).toBeLessThan(baseFov);
 
-		for ( let i = 0; i < 10; i ++ ) dispatchWheel( element, 50 );
+		for (let i = 0; i < 10; i ++) dispatchWheel(element, 50);
 
-		expect( camera.fov ).toBeGreaterThan( narrowedFov );
-		expect( camera.fov ).toBeLessThanOrEqual( baseFov + 0.1 );
+		expect(camera.fov).toBeGreaterThan(narrowedFov);
+		expect(camera.fov).toBeLessThanOrEqual(baseFov + 0.1);
 
-		const distanceBefore = camera.position.distanceTo( controls.pivot );
+		const distanceBefore = camera.position.distanceTo(controls.pivot);
 
-		dispatchWheel( element, 100 );
+		dispatchWheel(element, 100);
 
-		expect( camera.position.distanceTo( controls.pivot ) ).toBeGreaterThan( distanceBefore );
+		expect(camera.position.distanceTo(controls.pivot)).toBeGreaterThan(distanceBefore);
 		controls.dispose();
+	});
 
-	} );
-
-	it( 'resetBaseFov updates the base FOV', () => {
-
-		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+	it('resetBaseFov updates the base FOV', () => {
+		const { controls, camera, element } = createControls({ zoomMode: 'auto', minDistance: 950 });
 
 		camera.fov = 30;
 		camera.updateProjectionMatrix();
 		controls.resetBaseFov();
 
-		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+		for (let i = 0; i < 100; i ++) dispatchWheel(element, - 100);
 
-		for ( let i = 0; i < 200; i ++ ) dispatchWheel( element, 100 );
+		for (let i = 0; i < 200; i ++) dispatchWheel(element, 100);
 
-		expect( camera.fov ).toBeLessThanOrEqual( 30 + 0.1 );
+		expect(camera.fov).toBeLessThanOrEqual(30 + 0.1);
 		controls.dispose();
-
-	} );
-
-} );
+	});
+});
