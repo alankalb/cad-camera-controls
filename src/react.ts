@@ -1,1 +1,1 @@
-export { CADCameraControlsR3F, type CADCameraControlsR3FProps } from './CADCameraControlsR3F';
+export { CADCameraControlsR3F as CADCameraControls, type CADCameraControlsR3FProps as CADCameraControlsProps } from './CADCameraControlsR3F';

@@ -73,7 +73,7 @@ describe('construction and lifecycle', () => {
 
 		expect(controls.enabled).toBe(true);
 		expect(controls.enableDamping).toBe(true);
-		expect(controls.dampingFactor).toBe(0.9);
+		expect(controls.dampingFactor).toBe(0.05);
 		expect(controls.pivot.equals(new Vector3(0, 0, 0))).toBe(true);
 		expect(controls.inputBindings).toEqual({
 			rotate: { button: 0 },

@@ -82,7 +82,7 @@ const params = {
 	cameraType: 'Perspective' as string,
 	enabled: true,
 	enableDamping: true,
-	dampingFactor: 0.9,
+	dampingFactor: 0.05,
 	pivotX: 0,
 	pivotY: 0,
 	pivotZ: 0,
@@ -125,7 +125,7 @@ gui.add(params, 'cameraType', ['Perspective', 'Orthographic']).name('camera').on
 gui.add(params, 'zoomMode', ['dolly', 'fov', 'auto']).name('zoom mode').onChange(applyControls);
 gui.add(params, 'enabled').onChange(applyControls);
 gui.add(params, 'enableDamping').onChange(applyControls);
-gui.add(params, 'dampingFactor', 0.7, 0.99, 0.001).onChange(applyControls);
+gui.add(params, 'dampingFactor', 0, 1, 0.01).onChange(applyControls);
 
 const pivotFolder = gui.addFolder('pivot');
 pivotFolder.add(params, 'pivotX', - 1000, 1000, 1).onChange(applyControls);

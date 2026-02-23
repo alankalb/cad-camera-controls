@@ -23,10 +23,10 @@ const MIN_FACTOR = 0.1;
 const MAX_FACTOR = 10;
 const DISTANCE_SCALE = 0.25;
 const MIN_DISTANCE_BUFFER = 1;
-const MAX_DAMPING = 0.9999;
 const PINCH_SCALE = 0.25;
+const MIN_DAMPING = 0.0001;
 
-const DEFAULT_DAMPING_FACTOR = 0.9;
+const DEFAULT_DAMPING_FACTOR = 0.05;
 const DEFAULT_ROTATE_SPEED = 0.005;
 const DEFAULT_PAN_SPEED = 0.0016;
 const DEFAULT_ZOOM_SPEED = 0.0012;
@@ -173,6 +173,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	}
 
 	connect(domElement?: HTMLElement): void {
+		this.disconnect();
+
 		if (domElement) this.domElement = domElement;
 
 		const el = this.domElement;
@@ -204,6 +206,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 	dispose(): void {
 		this.disconnect();
+		this.domElement = null;
+		this._pointers.length = 0;
 	}
 
 	resetBaseFov(): void {
@@ -214,7 +218,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		if (! this.enabled || ! this.enableDamping || this._drag.isDragging) return false;
 
 		const deltaFrames = Math.max(0.001, deltaSeconds * 60);
-		const damping = Math.pow(MathUtils.clamp(this.dampingFactor, 0, MAX_DAMPING), deltaFrames);
+		const damping = Math.pow(1 - MathUtils.clamp(this.dampingFactor, MIN_DAMPING, 1), deltaFrames);
 		let changed = false;
 
 		if (Math.abs(this._rotateVelocity.x) > STOP_EPSILON || Math.abs(this._rotateVelocity.y) > STOP_EPSILON) {
@@ -527,12 +531,12 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 				this._panVelocity.set(dx, dy);
 			}
 
-			if (this.touchBindings.pinch) {
+			if (this.touchBindings.pinch && this.domElement) {
 				const currentDistance = this._getPointerDistance();
 				const delta = currentDistance - this._pinchDistance;
 				this._pinchDistance = currentDistance;
 
-				const el = this.domElement!;
+				const el = this.domElement;
 				const rect = el.getBoundingClientRect();
 				this._wheelPointer.set(
 					((midX - rect.left) / rect.width) * 2 - 1,
@@ -601,10 +605,10 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	}
 
 	private _onWheel(event: WheelEvent): void {
-		if (! this.enabled) return;
+		if (! this.enabled || ! this.domElement) return;
 		event.preventDefault();
 
-		const el = this.domElement!;
+		const el = this.domElement;
 		const rect = el.getBoundingClientRect();
 		this._pointer.set(
 			((event.clientX - rect.left) / rect.width) * 2 - 1,
