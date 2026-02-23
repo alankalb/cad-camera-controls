@@ -15,6 +15,28 @@ const WORLD_UP = new Vector3( 0, 1, 0 );
 const CAMERA_RIGHT = new Vector3( 1, 0, 0 );
 const CAMERA_UP = new Vector3( 0, 1, 0 );
 
+const PLANE_EPSILON = 1e-6;
+const STOP_EPSILON = 0.01;
+const ZOOM_STOP_EPSILON = 0.0001;
+const FOV_EPSILON = 0.01;
+const MIN_FACTOR = 0.1;
+const MAX_FACTOR = 10;
+const DISTANCE_SCALE = 0.25;
+const MIN_DISTANCE_BUFFER = 1;
+const MAX_DAMPING = 0.9999;
+const PINCH_SCALE = 0.25;
+
+const DEFAULT_DAMPING_FACTOR = 0.9;
+const DEFAULT_ROTATE_SPEED = 0.005;
+const DEFAULT_PAN_SPEED = 0.0016;
+const DEFAULT_ZOOM_SPEED = 0.0012;
+const DEFAULT_MIN_DISTANCE = 50;
+const DEFAULT_MAX_DISTANCE = 100000;
+const DEFAULT_MIN_ZOOM = 0.01;
+const DEFAULT_MAX_ZOOM = 1000;
+const DEFAULT_MIN_FOV = 1;
+const DEFAULT_MAX_FOV = 120;
+
 function hasModifier( event: PointerEvent, key: ModifierKey ): boolean {
 
 	if ( key === 'ctrl' ) return event.ctrlKey;
@@ -33,7 +55,7 @@ function intersectRayWithPlane(
 ): boolean {
 
 	const denom = planeNormal.dot( rayDirection );
-	if ( Math.abs( denom ) < 1e-6 ) return false;
+	if ( Math.abs( denom ) < PLANE_EPSILON ) return false;
 
 	const t = planeNormal.dot( out.copy( planePoint ).sub( rayOrigin ) ) / denom;
 	if ( t < 0 ) return false;
@@ -104,20 +126,20 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 		this.enabled = true;
 		this.enableDamping = true;
-		this.dampingFactor = 0.9;
+		this.dampingFactor = DEFAULT_DAMPING_FACTOR;
 		this.pivot = new Vector3( 0, 0, 0 );
 		this.inputBindings = { rotate: { button: 0 }, pan: { button: 2 } };
 		this.touchBindings = { one: 'rotate', two: 'pan', pinch: true };
-		this.rotateSpeed = 0.005;
-		this.panSpeed = 0.0016;
-		this.zoomSpeed = 0.0012;
-		this.minDistance = 50;
-		this.maxDistance = 100000;
-		this.minZoom = 0.01;
-		this.maxZoom = 1000;
+		this.rotateSpeed = DEFAULT_ROTATE_SPEED;
+		this.panSpeed = DEFAULT_PAN_SPEED;
+		this.zoomSpeed = DEFAULT_ZOOM_SPEED;
+		this.minDistance = DEFAULT_MIN_DISTANCE;
+		this.maxDistance = DEFAULT_MAX_DISTANCE;
+		this.minZoom = DEFAULT_MIN_ZOOM;
+		this.maxZoom = DEFAULT_MAX_ZOOM;
 		this.zoomMode = 'dolly';
-		this.minFov = 1;
-		this.maxFov = 120;
+		this.minFov = DEFAULT_MIN_FOV;
+		this.maxFov = DEFAULT_MAX_FOV;
 		this.preventContextMenu = true;
 
 		this._drag = { isDragging: false, mode: null, x: 0, y: 0 };
@@ -141,7 +163,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this._dollyVelocity = 0;
 		this._zoomVelocity = 1;
 		this._fovVelocity = 1;
-		this._baseFov = camera instanceof PerspectiveCamera ? camera.fov : 50;
+		this._baseFov = camera instanceof PerspectiveCamera ? camera.fov : DEFAULT_MAX_FOV;
 		this._pointers = [];
 		this._pinchDistance = 0;
 
@@ -209,9 +231,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 		if ( ! this.enabled || ! this.enableDamping || this._drag.isDragging ) return false;
 
-		const STOP_EPSILON = 0.01;
 		const deltaFrames = Math.max( 0.001, deltaSeconds * 60 );
-		const damping = Math.pow( MathUtils.clamp( this.dampingFactor, 0, 0.9999 ), deltaFrames );
+		const damping = Math.pow( MathUtils.clamp( this.dampingFactor, 0, MAX_DAMPING ), deltaFrames );
 		let changed = false;
 
 		if ( Math.abs( this._rotateVelocity.x ) > STOP_EPSILON || Math.abs( this._rotateVelocity.y ) > STOP_EPSILON ) {
@@ -237,8 +258,6 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 			changed = true;
 
 		}
-
-		const ZOOM_STOP_EPSILON = 0.0001;
 
 		if ( Math.abs( this._zoomVelocity - 1 ) > ZOOM_STOP_EPSILON ) {
 
@@ -408,6 +427,73 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 	}
 
+	private _applyScrollZoom( rawDelta: number, factorScale: number, pointer: Vector2 ): void {
+
+		if ( this.camera instanceof OrthographicCamera ) {
+
+			const factor = MathUtils.clamp( 1 + rawDelta * this.zoomSpeed * factorScale, MIN_FACTOR, MAX_FACTOR );
+			this._applyZoom( factor, pointer );
+			this._zoomVelocity = factor;
+
+		} else if ( this.zoomMode === 'fov' ) {
+
+			const factor = MathUtils.clamp( 1 + rawDelta * this.zoomSpeed * factorScale, MIN_FACTOR, MAX_FACTOR );
+			this._applyFovZoom( factor, pointer );
+			this._fovVelocity = factor;
+
+		} else if ( this.zoomMode === 'auto' ) {
+
+			const distance = this.camera.position.distanceTo( this.pivot );
+			const perspCam = this.camera as PerspectiveCamera;
+			const isZoomIn = rawDelta > 0;
+
+			if ( isZoomIn ) {
+
+				if ( distance <= this.minDistance + MIN_DISTANCE_BUFFER ) {
+
+					const dollyFraction = rawDelta * this.zoomSpeed * Math.max( 1, distance * DISTANCE_SCALE ) / distance;
+					const factor = MathUtils.clamp( 1 + dollyFraction, MIN_FACTOR, MAX_FACTOR );
+					this._applyFovZoom( factor, pointer );
+					this._fovVelocity = factor;
+
+				} else {
+
+					const step = rawDelta * this.zoomSpeed * Math.max( 1, distance * DISTANCE_SCALE );
+					this._applyDolly( step, pointer );
+					this._dollyVelocity = step;
+
+				}
+
+			} else {
+
+				if ( perspCam.fov < this._baseFov - FOV_EPSILON ) {
+
+					const dollyFraction = rawDelta * this.zoomSpeed * Math.max( 1, distance * DISTANCE_SCALE ) / distance;
+					const factor = MathUtils.clamp( 1 + dollyFraction, MIN_FACTOR, MAX_FACTOR );
+					this._applyFovZoom( factor, pointer, this._baseFov );
+					this._fovVelocity = factor;
+
+				} else {
+
+					const step = rawDelta * this.zoomSpeed * Math.max( 1, distance * DISTANCE_SCALE );
+					this._applyDolly( step, pointer );
+					this._dollyVelocity = step;
+
+				}
+
+			}
+
+		} else {
+
+			const distance = this.camera.position.distanceTo( this.pivot );
+			const step = rawDelta * this.zoomSpeed * Math.max( 1, distance * DISTANCE_SCALE );
+			this._applyDolly( step, pointer );
+			this._dollyVelocity = step;
+
+		}
+
+	}
+
 	private _onContextMenu( event: Event ): void {
 
 		if ( this.preventContextMenu ) event.preventDefault();
@@ -561,69 +647,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 					- ( ( midY - rect.top ) / rect.height ) * 2 + 1
 				);
 
-				if ( this.camera instanceof OrthographicCamera ) {
-
-					const factor = MathUtils.clamp( 1 + delta * this.zoomSpeed * 0.25, 0.1, 10 );
-					this._applyZoom( factor, this._wheelPointer );
-					this._zoomVelocity = factor;
-
-				} else if ( this.zoomMode === 'fov' ) {
-
-					const factor = MathUtils.clamp( 1 + delta * this.zoomSpeed * 0.25, 0.1, 10 );
-					this._applyFovZoom( factor, this._wheelPointer );
-					this._fovVelocity = factor;
-
-				} else if ( this.zoomMode === 'auto' ) {
-
-					const distance = this.camera.position.distanceTo( this.pivot );
-					const perspCam = this.camera as PerspectiveCamera;
-					const isZoomIn = delta > 0;
-					const FOV_EPSILON = 0.01;
-
-					if ( isZoomIn ) {
-
-						if ( distance <= this.minDistance + 1 ) {
-
-							const dollyFraction = delta * this.zoomSpeed * Math.max( 1, distance * 0.25 ) / distance;
-							const factor = MathUtils.clamp( 1 + dollyFraction, 0.1, 10 );
-							this._applyFovZoom( factor, this._wheelPointer );
-							this._fovVelocity = factor;
-
-						} else {
-
-							const step = delta * this.zoomSpeed * Math.max( 1, distance * 0.25 );
-							this._applyDolly( step, this._wheelPointer );
-							this._dollyVelocity = step;
-
-						}
-
-					} else {
-
-						if ( perspCam.fov < this._baseFov - FOV_EPSILON ) {
-
-							const dollyFraction = delta * this.zoomSpeed * Math.max( 1, distance * 0.25 ) / distance;
-							const factor = MathUtils.clamp( 1 + dollyFraction, 0.1, 10 );
-							this._applyFovZoom( factor, this._wheelPointer, this._baseFov );
-							this._fovVelocity = factor;
-
-						} else {
-
-							const step = delta * this.zoomSpeed * Math.max( 1, distance * 0.25 );
-							this._applyDolly( step, this._wheelPointer );
-							this._dollyVelocity = step;
-
-						}
-
-					}
-
-				} else {
-
-					const distance = this.camera.position.distanceTo( this.pivot );
-					const step = delta * this.zoomSpeed * Math.max( 1, distance * 0.25 );
-					this._applyDolly( step, this._wheelPointer );
-					this._dollyVelocity = step;
-
-				}
+				this._applyScrollZoom( delta, PINCH_SCALE, this._wheelPointer );
 
 			}
 
@@ -722,70 +746,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		);
 
 		this._wheelPointer.copy( this._pointer );
-
-		if ( this.camera instanceof OrthographicCamera ) {
-
-			const factor = MathUtils.clamp( 1 - event.deltaY * this.zoomSpeed, 0.1, 10 );
-			this._applyZoom( factor, this._wheelPointer );
-			this._zoomVelocity = factor;
-
-		} else if ( this.zoomMode === 'fov' ) {
-
-			const factor = MathUtils.clamp( 1 - event.deltaY * this.zoomSpeed, 0.1, 10 );
-			this._applyFovZoom( factor, this._wheelPointer );
-			this._fovVelocity = factor;
-
-		} else if ( this.zoomMode === 'auto' ) {
-
-			const distance = this.camera.position.distanceTo( this.pivot );
-			const perspCam = this.camera as PerspectiveCamera;
-			const isZoomIn = event.deltaY < 0;
-			const FOV_EPSILON = 0.01;
-
-			if ( isZoomIn ) {
-
-				if ( distance <= this.minDistance + 1 ) {
-
-					const dollyFraction = - event.deltaY * this.zoomSpeed * Math.max( 1, distance * 0.25 ) / distance;
-					const factor = MathUtils.clamp( 1 + dollyFraction, 0.1, 10 );
-					this._applyFovZoom( factor, this._wheelPointer );
-					this._fovVelocity = factor;
-
-				} else {
-
-					const step = - event.deltaY * this.zoomSpeed * Math.max( 1, distance * 0.25 );
-					this._applyDolly( step, this._wheelPointer );
-					this._dollyVelocity = step;
-
-				}
-
-			} else {
-
-				if ( perspCam.fov < this._baseFov - FOV_EPSILON ) {
-
-					const dollyFraction = - event.deltaY * this.zoomSpeed * Math.max( 1, distance * 0.25 ) / distance;
-					const factor = MathUtils.clamp( 1 + dollyFraction, 0.1, 10 );
-					this._applyFovZoom( factor, this._wheelPointer, this._baseFov );
-					this._fovVelocity = factor;
-
-				} else {
-
-					const step = - event.deltaY * this.zoomSpeed * Math.max( 1, distance * 0.25 );
-					this._applyDolly( step, this._wheelPointer );
-					this._dollyVelocity = step;
-
-				}
-
-			}
-
-		} else {
-
-			const distance = this.camera.position.distanceTo( this.pivot );
-			const step = - event.deltaY * this.zoomSpeed * Math.max( 1, distance * 0.25 );
-			this._applyDolly( step, this._wheelPointer );
-			this._dollyVelocity = step;
-
-		}
+		this._applyScrollZoom( - event.deltaY, 1, this._wheelPointer );
 
 	}
 

@@ -28,13 +28,22 @@ scene.add( directional );
 
 // Scene objects
 
-const grid = new THREE.GridHelper( 4000, 40, 0x444444, 0x222222 );
+const GRID_SIZE = 4000;
+const GRID_DIVISIONS = 40;
+const AXES_SIZE = 300;
+const CUBE_SIZE = 120;
+const CAMERA_FOV = 50;
+const CAMERA_NEAR = 0.1;
+const CAMERA_FAR = 200000;
+const CAMERA_DISTANCE = 1200;
+const ORTHO_FRUSTUM = 1200;
+
+const grid = new THREE.GridHelper( GRID_SIZE, GRID_DIVISIONS, 0x444444, 0x222222 );
 scene.add( grid );
 
-const axes = new THREE.AxesHelper( 300 );
+const axes = new THREE.AxesHelper( AXES_SIZE );
 scene.add( axes );
 
-const CUBE_SIZE = 120;
 const cube = new THREE.Mesh(
 	new THREE.BoxGeometry( CUBE_SIZE, CUBE_SIZE, CUBE_SIZE ),
 	new THREE.MeshNormalMaterial()
@@ -45,12 +54,10 @@ scene.add( cube );
 
 let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera = createPerspectiveCamera();
 
-const ORTHO_FRUSTUM = 1200;
-
 function createPerspectiveCamera(): THREE.PerspectiveCamera {
 
-	const cam = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.1, 200000 );
-	cam.position.set( 0, 0, 1200 );
+	const cam = new THREE.PerspectiveCamera( CAMERA_FOV, window.innerWidth / window.innerHeight, CAMERA_NEAR, CAMERA_FAR );
+	cam.position.set( 0, 0, CAMERA_DISTANCE );
 	return cam;
 
 }
@@ -63,10 +70,10 @@ function createOrthographicCamera(): THREE.OrthographicCamera {
 		ORTHO_FRUSTUM * aspect / 2,
 		ORTHO_FRUSTUM / 2,
 		- ORTHO_FRUSTUM / 2,
-		0.1,
-		200000
+		CAMERA_NEAR,
+		CAMERA_FAR
 	);
-	cam.position.set( 0, 0, 1200 );
+	cam.position.set( 0, 0, CAMERA_DISTANCE );
 	return cam;
 
 }
