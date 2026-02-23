@@ -1,7 +1,7 @@
 import { extend, useThree, useFrame, type ThreeElement } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { CADCameraControls } from './CADCameraControls'
-import type { InputBindings, TouchBindings } from './types'
+import type { InputBindings, TouchBindings, ZoomMode } from './types'
 
 extend( { CADCameraControls } )
 
@@ -25,6 +25,9 @@ export type CADCameraControlsR3FProps = {
   maxDistance?: number
   minZoom?: number
   maxZoom?: number
+  zoomMode?: ZoomMode
+  minFov?: number
+  maxFov?: number
   preventContextMenu?: boolean
 }
 

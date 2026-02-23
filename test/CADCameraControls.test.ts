@@ -103,6 +103,9 @@ describe( 'construction and lifecycle', () => {
 		expect( controls.maxDistance ).toBe( 100000 );
 		expect( controls.minZoom ).toBe( 0.01 );
 		expect( controls.maxZoom ).toBe( 1000 );
+		expect( controls.zoomMode ).toBe( 'dolly' );
+		expect( controls.minFov ).toBe( 1 );
+		expect( controls.maxFov ).toBe( 120 );
 		expect( controls.preventContextMenu ).toBe( true );
 		controls.dispose();
 
@@ -895,6 +898,256 @@ describe( 'orthographic damping', () => {
 		controls.update( 1 / 60 );
 
 		expect( camera.zoom ).toBeCloseTo( zoomBefore, 5 );
+		controls.dispose();
+
+	} );
+
+} );
+
+describe( 'fov zoom', () => {
+
+	it( 'wheel scroll in fov mode decreases camera.fov (zoom in)', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
+		const initialFov = camera.fov;
+
+		dispatchWheel( element, - 100 );
+
+		expect( camera.fov ).toBeLessThan( initialFov );
+		controls.dispose();
+
+	} );
+
+	it( 'wheel scroll in fov mode increases camera.fov (zoom out)', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
+		const initialFov = camera.fov;
+
+		dispatchWheel( element, 100 );
+
+		expect( camera.fov ).toBeGreaterThan( initialFov );
+		controls.dispose();
+
+	} );
+
+	it( 'camera distance from pivot stays approximately constant during fov zoom', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
+		const initialDistance = camera.position.distanceTo( controls.pivot );
+
+		dispatchWheel( element, - 100, 400, 300 );
+
+		const finalDistance = camera.position.distanceTo( controls.pivot );
+		expect( finalDistance ).toBeCloseTo( initialDistance, 0 );
+		controls.dispose();
+
+	} );
+
+	it( 'minFov clamping prevents fov from going below minimum', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'fov', minFov: 10 } );
+
+		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 200 );
+
+		expect( camera.fov ).toBeGreaterThanOrEqual( 10 );
+		controls.dispose();
+
+	} );
+
+	it( 'maxFov clamping prevents fov from exceeding maximum', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'fov', maxFov: 80 } );
+
+		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, 200 );
+
+		expect( camera.fov ).toBeLessThanOrEqual( 80 );
+		controls.dispose();
+
+	} );
+
+	it( 'fov velocity decays with damping', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
+
+		dispatchWheel( element, - 100 );
+
+		const fov0 = camera.fov;
+		controls.update( 1 / 60 );
+		const ratio1 = camera.fov / fov0;
+
+		const fov1 = camera.fov;
+		controls.update( 1 / 60 );
+		const ratio2 = camera.fov / fov1;
+
+		expect( Math.abs( ratio2 - 1 ) ).toBeLessThan( Math.abs( ratio1 - 1 ) );
+		controls.dispose();
+
+	} );
+
+	it( 'starting a drag clears fov velocity', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'fov', enableDamping: false } );
+
+		dispatchWheel( element, - 100 );
+		expect( camera.fov ).toBeLessThan( 50 );
+
+		dispatchPointer( element, 'pointerdown', { button: 0, clientX: 400, clientY: 300 } );
+		dispatchPointer( element, 'pointerup', { button: 0, clientX: 400, clientY: 300 } );
+
+		controls.enableDamping = true;
+		const fovBefore = camera.fov;
+		controls.update( 1 / 60 );
+
+		expect( camera.fov ).toBeCloseTo( fovBefore, 5 );
+		controls.dispose();
+
+	} );
+
+	it( 'pinch zoom changes fov in touch mode', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'fov' } );
+		const initialFov = camera.fov;
+
+		simulatePinch( element, { startSpread: 100, endSpread: 300, steps: 5 } );
+
+		expect( camera.fov ).toBeLessThan( initialFov );
+		controls.dispose();
+
+	} );
+
+	it( 'dolly mode is unaffected by zoomMode setting (default behavior)', () => {
+
+		const { controls, camera, element } = createControls();
+		const initialFov = camera.fov;
+		const initialDistance = camera.position.distanceTo( controls.pivot );
+
+		dispatchWheel( element, - 100 );
+
+		expect( camera.fov ).toBe( initialFov );
+		expect( camera.position.distanceTo( controls.pivot ) ).toBeLessThan( initialDistance );
+		controls.dispose();
+
+	} );
+
+} );
+
+describe( 'auto zoom', () => {
+
+	it( 'dollies normally when far from minDistance', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 200 } );
+		const initialDistance = camera.position.distanceTo( controls.pivot );
+		const initialFov = camera.fov;
+
+		dispatchWheel( element, - 100 );
+
+		expect( camera.position.distanceTo( controls.pivot ) ).toBeLessThan( initialDistance );
+		expect( camera.fov ).toBe( initialFov );
+		controls.dispose();
+
+	} );
+
+	it( 'switches to FOV zoom after hitting minDistance', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 100 } );
+		const initialFov = camera.fov;
+
+		dispatchWheel( element, - 10 );
+
+		expect( camera.fov ).toBe( initialFov );
+		expect( camera.position.distanceTo( controls.pivot ) ).toBeLessThan( 1000 );
+
+		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+
+		expect( camera.fov ).toBeLessThan( initialFov );
+		controls.dispose();
+
+	} );
+
+	it( 'camera distance stays at minDistance during FOV zoom phase', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+
+		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+
+		const distanceAtMin = camera.position.distanceTo( controls.pivot );
+
+		for ( let i = 0; i < 10; i ++ ) dispatchWheel( element, - 100 );
+
+		const distanceAfterFov = camera.position.distanceTo( controls.pivot );
+		expect( distanceAfterFov ).toBeCloseTo( distanceAtMin, 0 );
+		controls.dispose();
+
+	} );
+
+	it( 'zoom-out widens FOV before increasing distance', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+		const baseFov = camera.fov;
+
+		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+
+		const narrowedFov = camera.fov;
+		expect( narrowedFov ).toBeLessThan( baseFov );
+
+		for ( let i = 0; i < 3; i ++ ) dispatchWheel( element, 100 );
+
+		expect( camera.fov ).toBeGreaterThan( narrowedFov );
+		controls.dispose();
+
+	} );
+
+	it( 'FOV does not exceed baseFov during zoom-out', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+		const baseFov = camera.fov;
+
+		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+
+		for ( let i = 0; i < 200; i ++ ) dispatchWheel( element, 100 );
+
+		expect( camera.fov ).toBeLessThanOrEqual( baseFov + 0.1 );
+		controls.dispose();
+
+	} );
+
+	it( 'resumes dollying outward once FOV is restored', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+		const baseFov = camera.fov;
+
+		for ( let i = 0; i < 10; i ++ ) dispatchWheel( element, - 50 );
+
+		const narrowedFov = camera.fov;
+		expect( narrowedFov ).toBeLessThan( baseFov );
+
+		for ( let i = 0; i < 10; i ++ ) dispatchWheel( element, 50 );
+
+		expect( camera.fov ).toBeGreaterThan( narrowedFov );
+		expect( camera.fov ).toBeLessThanOrEqual( baseFov + 0.1 );
+
+		const distanceBefore = camera.position.distanceTo( controls.pivot );
+
+		dispatchWheel( element, 100 );
+
+		expect( camera.position.distanceTo( controls.pivot ) ).toBeGreaterThan( distanceBefore );
+		controls.dispose();
+
+	} );
+
+	it( 'resetBaseFov updates the base FOV', () => {
+
+		const { controls, camera, element } = createControls( { zoomMode: 'auto', minDistance: 950 } );
+
+		camera.fov = 30;
+		camera.updateProjectionMatrix();
+		controls.resetBaseFov();
+
+		for ( let i = 0; i < 100; i ++ ) dispatchWheel( element, - 100 );
+
+		for ( let i = 0; i < 200; i ++ ) dispatchWheel( element, 100 );
+
+		expect( camera.fov ).toBeLessThanOrEqual( 30 + 0.1 );
 		controls.dispose();
 
 	} );

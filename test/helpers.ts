@@ -33,7 +33,8 @@ export function createDomElement(): HTMLDivElement {
 export function createControls( overrides?: Partial<Pick<CADCameraControls,
 	'enabled' | 'enableDamping' | 'dampingFactor' | 'inputBindings' |
 	'touchBindings' | 'rotateSpeed' | 'panSpeed' | 'zoomSpeed' |
-	'minDistance' | 'maxDistance' | 'minZoom' | 'maxZoom' | 'preventContextMenu'
+	'minDistance' | 'maxDistance' | 'minZoom' | 'maxZoom' |
+	'zoomMode' | 'minFov' | 'maxFov' | 'preventContextMenu'
 >> ): { controls: CADCameraControls; camera: PerspectiveCamera; element: HTMLDivElement } {
 
 	const camera = createCamera();
@@ -72,7 +73,8 @@ export function createOrthoCamera(): OrthographicCamera {
 export function createOrthoControls( overrides?: Partial<Pick<CADCameraControls,
 	'enabled' | 'enableDamping' | 'dampingFactor' | 'inputBindings' |
 	'touchBindings' | 'rotateSpeed' | 'panSpeed' | 'zoomSpeed' |
-	'minDistance' | 'maxDistance' | 'minZoom' | 'maxZoom' | 'preventContextMenu'
+	'minDistance' | 'maxDistance' | 'minZoom' | 'maxZoom' |
+	'zoomMode' | 'minFov' | 'maxFov' | 'preventContextMenu'
 >> ): { controls: CADCameraControls; camera: OrthographicCamera; element: HTMLDivElement } {
 
 	const camera = createOrthoCamera();

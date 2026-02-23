@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import GUI from 'lil-gui';
 import { CADCameraControls } from '../src/CADCameraControls';
+import type { ZoomMode } from '../src/types';
 import { buildInputBindings } from './bindings';
 import type { ButtonLabel, ModifierLabel } from './bindings';
 
@@ -33,8 +34,9 @@ scene.add( grid );
 const axes = new THREE.AxesHelper( 300 );
 scene.add( axes );
 
+const CUBE_SIZE = 120;
 const cube = new THREE.Mesh(
-	new THREE.BoxGeometry( 120, 120, 120 ),
+	new THREE.BoxGeometry( CUBE_SIZE, CUBE_SIZE, CUBE_SIZE ),
 	new THREE.MeshNormalMaterial()
 );
 scene.add( cube );
@@ -87,10 +89,13 @@ const params = {
 	rotateSpeed: 0.005,
 	panSpeed: 0.001,
 	zoomSpeed: 0.005,
-	minDistance: 50,
+	zoomMode: 'dolly' as ZoomMode,
+	minDistance: Math.ceil( 1.1 * CUBE_SIZE * Math.sqrt( 3 ) / 2 ),
 	maxDistance: 100000,
 	minZoom: 0.01,
 	maxZoom: 1000,
+	minFov: 1,
+	maxFov: 120,
 	preventContextMenu: true,
 };
 
@@ -120,6 +125,7 @@ function switchCamera(): void {
 const gui = new GUI();
 
 gui.add( params, 'cameraType', [ 'Perspective', 'Orthographic' ] ).name( 'camera' ).onChange( switchCamera );
+gui.add( params, 'zoomMode', [ 'dolly', 'fov', 'auto' ] ).name( 'zoom mode' ).onChange( applyControls );
 gui.add( params, 'enabled' ).onChange( applyControls );
 gui.add( params, 'enableDamping' ).onChange( applyControls );
 gui.add( params, 'dampingFactor', 0.7, 0.99, 0.001 ).onChange( applyControls );
@@ -147,6 +153,8 @@ limitsFolder.add( params, 'minDistance', 1, 10000, 1 ).onChange( applyControls )
 limitsFolder.add( params, 'maxDistance', 100, 200000, 10 ).onChange( applyControls );
 limitsFolder.add( params, 'minZoom', 0.001, 1, 0.001 ).onChange( applyControls );
 limitsFolder.add( params, 'maxZoom', 1, 2000, 1 ).onChange( applyControls );
+limitsFolder.add( params, 'minFov', 1, 60, 1 ).onChange( applyControls );
+limitsFolder.add( params, 'maxFov', 60, 170, 1 ).onChange( applyControls );
 
 // Helpers
 
@@ -200,6 +208,9 @@ function applyControls(): void {
 	controls.maxDistance = Math.max( params.maxDistance, params.minDistance + 1 );
 	controls.minZoom = params.minZoom;
 	controls.maxZoom = params.maxZoom;
+	controls.zoomMode = params.zoomMode;
+	controls.minFov = params.minFov;
+	controls.maxFov = params.maxFov;
 	controls.preventContextMenu = params.preventContextMenu;
 	applyBindingsText();
 

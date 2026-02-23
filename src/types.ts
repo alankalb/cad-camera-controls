@@ -1,5 +1,6 @@
 export type MouseButton = 0 | 1 | 2;
 export type ModifierKey = 'ctrl' | 'meta' | 'alt' | 'shift';
+export type ZoomMode = 'dolly' | 'fov' | 'auto';
 
 // Same button — modifier is REQUIRED to disambiguate
 type SameButtonBindings =
