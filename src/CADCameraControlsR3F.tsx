@@ -1,7 +1,7 @@
 import { extend, useThree, useFrame, type ThreeElement } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import { CADCameraControls } from './CADCameraControls';
-import type { InputBindings, TouchBindings, ZoomMode } from './types';
+import type { InputBindings, TouchBindings, KeyboardKeys, KeyboardBindings, ZoomMode } from './types';
 
 extend({ CADCameraControls });
 
@@ -29,6 +29,13 @@ export type CADCameraControlsR3FProps = {
 	minFov?: number
 	maxFov?: number
 	preventContextMenu?: boolean
+	enableKeyboard?: boolean
+	keyboardBindings?: KeyboardBindings
+	keyPanSpeed?: number
+	keyRotateSpeed?: number
+	keyZoomSpeed?: number
+	keys?: KeyboardKeys
+	listenToKeyEvents?: boolean
 };
 
 export function CADCameraControlsR3F(props: CADCameraControlsR3FProps) {
@@ -37,8 +44,11 @@ export function CADCameraControlsR3F(props: CADCameraControlsR3FProps) {
 
 	useEffect(() => {
 		ref.current.connect(gl.domElement);
+		if (props.listenToKeyEvents !== false) {
+			ref.current.listenToKeyEvents(gl.domElement);
+		}
 		return () => ref.current.dispose();
-	}, [gl.domElement]);
+	}, [gl.domElement, props.listenToKeyEvents]);
 
 	useFrame((_, delta) => ref.current.update(delta));
 

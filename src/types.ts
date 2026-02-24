@@ -25,6 +25,26 @@ export type TouchBindings = {
 	pinch: boolean;
 };
 
+export type KeyboardKeys = {
+	LEFT: string;
+	UP: string;
+	RIGHT: string;
+	BOTTOM: string;
+};
+
+// Each keyboard action is active with a modifier, active bare (no modifier), or disabled.
+// Runtime validation enforces:
+//   • At most one active action can be bare
+//   • All active modifiers are unique
+//   • At least one action is active
+type KeyboardAction = { modifier: ModifierKey } | {} | false;
+
+export type KeyboardBindings = {
+	rotate: KeyboardAction;
+	pan: KeyboardAction;
+	zoom: KeyboardAction;
+};
+
 export type CADCameraControlsEventMap = {
 	change: {};
 	start: {};

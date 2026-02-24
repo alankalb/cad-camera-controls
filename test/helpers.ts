@@ -25,6 +25,9 @@ export function createDomElement(): HTMLDivElement {
 		},
 	});
 
+	Object.defineProperty(el, 'clientHeight', { value: 600, configurable: true });
+	Object.defineProperty(el, 'clientWidth', { value: 800, configurable: true });
+
 	return el;
 }
 
@@ -32,7 +35,8 @@ export function createControls(overrides?: Partial<Pick<CADCameraControls,
 	'enabled' | 'enableDamping' | 'dampingFactor' | 'inputBindings' |
 	'touchBindings' | 'rotateSpeed' | 'panSpeed' | 'zoomSpeed' |
 	'minDistance' | 'maxDistance' | 'minZoom' | 'maxZoom' |
-	'zoomMode' | 'minFov' | 'maxFov' | 'preventContextMenu'
+	'zoomMode' | 'minFov' | 'maxFov' | 'preventContextMenu' |
+	'enableKeyboard' | 'keyboardBindings' | 'keyPanSpeed' | 'keyRotateSpeed' | 'keyZoomSpeed' | 'keys'
 >>): { controls: CADCameraControls; camera: PerspectiveCamera; element: HTMLDivElement } {
 	const camera = createCamera();
 	const element = createDomElement();
@@ -66,7 +70,8 @@ export function createOrthoControls(overrides?: Partial<Pick<CADCameraControls,
 	'enabled' | 'enableDamping' | 'dampingFactor' | 'inputBindings' |
 	'touchBindings' | 'rotateSpeed' | 'panSpeed' | 'zoomSpeed' |
 	'minDistance' | 'maxDistance' | 'minZoom' | 'maxZoom' |
-	'zoomMode' | 'minFov' | 'maxFov' | 'preventContextMenu'
+	'zoomMode' | 'minFov' | 'maxFov' | 'preventContextMenu' |
+	'enableKeyboard' | 'keyboardBindings' | 'keyPanSpeed' | 'keyRotateSpeed' | 'keyZoomSpeed' | 'keys'
 >>): { controls: CADCameraControls; camera: OrthographicCamera; element: HTMLDivElement } {
 	const camera = createOrthoCamera();
 	const element = createDomElement();
@@ -256,4 +261,25 @@ export function simulatePinch(
 	dispatchTouch(element, 'pointerup', {
 		clientX: centerX + endSpread / 2, clientY: centerY, pointerId: finger2Id,
 	});
+}
+
+export function dispatchKeyDown(
+	element: HTMLElement,
+	code: string,
+	options: {
+		ctrlKey?: boolean;
+		metaKey?: boolean;
+		altKey?: boolean;
+		shiftKey?: boolean;
+	} = {}
+): void {
+	element.dispatchEvent(new KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		code,
+		ctrlKey: options.ctrlKey ?? false,
+		metaKey: options.metaKey ?? false,
+		altKey: options.altKey ?? false,
+		shiftKey: options.shiftKey ?? false,
+	}));
 }

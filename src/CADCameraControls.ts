@@ -9,7 +9,7 @@ import {
 	Vector3,
 } from 'three';
 
-import type { ModifierKey, ZoomMode, InputBindings, TouchBindings, CADCameraControlsEventMap } from './types';
+import type { ModifierKey, ZoomMode, InputBindings, TouchBindings, KeyboardKeys, KeyboardBindings, CADCameraControlsEventMap } from './types';
 
 const WORLD_UP = new Vector3(0, 1, 0);
 const CAMERA_RIGHT = new Vector3(1, 0, 0);
@@ -19,17 +19,18 @@ const PLANE_EPSILON = 1e-6;
 const STOP_EPSILON = 0.01;
 const ZOOM_STOP_EPSILON = 0.0001;
 const FOV_EPSILON = 0.01;
-const MIN_FACTOR = 0.1;
-const MAX_FACTOR = 10;
-const DISTANCE_SCALE = 0.25;
+const ZOOM_BASE = 0.95;
 const MIN_DISTANCE_BUFFER = 1;
 const PINCH_SCALE = 0.25;
 const MIN_DAMPING = 0.0001;
 
 const DEFAULT_DAMPING_FACTOR = 0.05;
+const DEFAULT_KEY_PAN_SPEED = 7;
+const DEFAULT_KEY_ROTATE_SPEED = 1;
+const DEFAULT_KEY_ZOOM_SPEED = 1;
 const DEFAULT_ROTATE_SPEED = 0.005;
 const DEFAULT_PAN_SPEED = 0.0016;
-const DEFAULT_ZOOM_SPEED = 0.0012;
+const DEFAULT_ZOOM_SPEED = 1;
 const DEFAULT_MIN_DISTANCE = 50;
 const DEFAULT_MAX_DISTANCE = 100000;
 const DEFAULT_MIN_ZOOM = 0.01;
@@ -37,11 +38,43 @@ const DEFAULT_MAX_ZOOM = 1000;
 const DEFAULT_MIN_FOV = 1;
 const DEFAULT_MAX_FOV = 120;
 
-function hasModifier(event: PointerEvent, key: ModifierKey): boolean {
+function hasModifier(event: PointerEvent | KeyboardEvent, key: ModifierKey): boolean {
 	if (key === 'ctrl') return event.ctrlKey;
 	if (key === 'meta') return event.metaKey;
 	if (key === 'alt') return event.altKey;
 	return event.shiftKey;
+}
+
+function hasNoModifier(event: PointerEvent | KeyboardEvent): boolean {
+	return ! event.ctrlKey && ! event.metaKey && ! event.altKey && ! event.shiftKey;
+}
+
+function validateKeyboardBindings(bindings: KeyboardBindings): void {
+	const actions = [bindings.rotate, bindings.pan, bindings.zoom];
+	const active = actions.filter((a): a is Exclude<typeof a, false> => a !== false);
+
+	if (active.length === 0) {
+		throw new Error('keyboardBindings: at least one action must be active');
+	}
+
+	let bareCount = 0;
+	const modifiers: ModifierKey[] = [];
+
+	for (const action of active) {
+		if ('modifier' in action) {
+			const mod = (action as { modifier: ModifierKey }).modifier;
+			if (modifiers.includes(mod)) {
+				throw new Error(`keyboardBindings: duplicate modifier '${ mod }'`);
+			}
+			modifiers.push(mod);
+		} else {
+			bareCount ++;
+		}
+	}
+
+	if (bareCount > 1) {
+		throw new Error('keyboardBindings: at most one action can be bare (no modifier)');
+	}
 }
 
 function intersectRayWithPlane(
@@ -86,6 +119,11 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	minFov: number;
 	maxFov: number;
 	preventContextMenu: boolean;
+	enableKeyboard: boolean;
+	keyPanSpeed: number;
+	keyRotateSpeed: number;
+	keyZoomSpeed: number;
+	keys: KeyboardKeys;
 
 	private _drag: { isDragging: boolean; mode: 'rotate' | 'pan' | null; x: number; y: number };
 	private _raycaster: Raycaster;
@@ -110,7 +148,9 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	private _fovVelocity: number;
 	private _baseFov: number;
 	private _pointers: PointerEvent[];
+	private _keyboardBindings: KeyboardBindings;
 	private _pinchDistance: number;
+	private _keyboardElement: HTMLElement | null;
 
 	constructor(camera: PerspectiveCamera | OrthographicCamera, domElement?: HTMLElement) {
 		super();
@@ -135,6 +175,12 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this.minFov = DEFAULT_MIN_FOV;
 		this.maxFov = DEFAULT_MAX_FOV;
 		this.preventContextMenu = true;
+		this.enableKeyboard = true;
+		this._keyboardBindings = { rotate: { modifier: 'shift' }, pan: {}, zoom: false };
+		this.keyPanSpeed = DEFAULT_KEY_PAN_SPEED;
+		this.keyRotateSpeed = DEFAULT_KEY_ROTATE_SPEED;
+		this.keyZoomSpeed = DEFAULT_KEY_ZOOM_SPEED;
+		this.keys = { LEFT: 'ArrowLeft', UP: 'ArrowUp', RIGHT: 'ArrowRight', BOTTOM: 'ArrowDown' };
 
 		this._drag = { isDragging: false, mode: null, x: 0, y: 0 };
 		this._raycaster = new Raycaster();
@@ -160,12 +206,14 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this._baseFov = camera instanceof PerspectiveCamera ? camera.fov : DEFAULT_MAX_FOV;
 		this._pointers = [];
 		this._pinchDistance = 0;
+		this._keyboardElement = null;
 
 		this._onContextMenu = this._onContextMenu.bind(this);
 		this._onPointerDown = this._onPointerDown.bind(this);
 		this._onPointerMove = this._onPointerMove.bind(this);
 		this._onPointerUp = this._onPointerUp.bind(this);
 		this._onWheel = this._onWheel.bind(this);
+		this._onKeyDown = this._onKeyDown.bind(this);
 
 		if (this.domElement) {
 			this.connect();
@@ -204,10 +252,33 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		el.style.touchAction = '';
 	}
 
+	listenToKeyEvents(domElement: HTMLElement): void {
+		this.stopListenToKeyEvents();
+		this._keyboardElement = domElement;
+		domElement.addEventListener('keydown', this._onKeyDown);
+	}
+
+	stopListenToKeyEvents(): void {
+		if (this._keyboardElement) {
+			this._keyboardElement.removeEventListener('keydown', this._onKeyDown);
+			this._keyboardElement = null;
+		}
+	}
+
 	dispose(): void {
+		this.stopListenToKeyEvents();
 		this.disconnect();
 		this.domElement = null;
 		this._pointers.length = 0;
+	}
+
+	get keyboardBindings(): KeyboardBindings {
+		return this._keyboardBindings;
+	}
+
+	set keyboardBindings(value: KeyboardBindings) {
+		validateKeyboardBindings(value);
+		this._keyboardBindings = value;
 	}
 
 	resetBaseFov(): void {
@@ -377,12 +448,15 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	}
 
 	private _applyScrollZoom(rawDelta: number, factorScale: number, pointer: Vector2): void {
+		const normalizedDelta = rawDelta * 0.01;
+		const dampingScale = this.enableDamping ? this.dampingFactor : 1;
+		const scale = Math.pow(ZOOM_BASE, this.zoomSpeed * normalizedDelta * factorScale * dampingScale);
+		const factor = 1 / scale;
+
 		if (this.camera instanceof OrthographicCamera) {
-			const factor = MathUtils.clamp(1 + rawDelta * this.zoomSpeed * factorScale, MIN_FACTOR, MAX_FACTOR);
 			this._applyZoom(factor, pointer);
 			this._zoomVelocity = factor;
 		} else if (this.zoomMode === 'fov') {
-			const factor = MathUtils.clamp(1 + rawDelta * this.zoomSpeed * factorScale, MIN_FACTOR, MAX_FACTOR);
 			this._applyFovZoom(factor, pointer);
 			this._fovVelocity = factor;
 		} else if (this.zoomMode === 'auto') {
@@ -392,31 +466,71 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 			if (isZoomIn) {
 				if (distance <= this.minDistance + MIN_DISTANCE_BUFFER) {
-					const dollyFraction = rawDelta * this.zoomSpeed * Math.max(1, distance * DISTANCE_SCALE) / distance;
-					const factor = MathUtils.clamp(1 + dollyFraction, MIN_FACTOR, MAX_FACTOR);
 					this._applyFovZoom(factor, pointer);
 					this._fovVelocity = factor;
 				} else {
-					const step = rawDelta * this.zoomSpeed * Math.max(1, distance * DISTANCE_SCALE);
+					const step = distance * (1 - scale);
 					this._applyDolly(step, pointer);
 					this._dollyVelocity = step;
 				}
 			} else {
 				if (perspCam.fov < this._baseFov - FOV_EPSILON) {
-					const dollyFraction = rawDelta * this.zoomSpeed * Math.max(1, distance * DISTANCE_SCALE) / distance;
-					const factor = MathUtils.clamp(1 + dollyFraction, MIN_FACTOR, MAX_FACTOR);
 					this._applyFovZoom(factor, pointer, this._baseFov);
 					this._fovVelocity = factor;
 				} else {
-					const step = rawDelta * this.zoomSpeed * Math.max(1, distance * DISTANCE_SCALE);
+					const step = distance * (1 - scale);
 					this._applyDolly(step, pointer);
 					this._dollyVelocity = step;
 				}
 			}
 		} else {
 			const distance = this.camera.position.distanceTo(this.pivot);
-			const step = rawDelta * this.zoomSpeed * Math.max(1, distance * DISTANCE_SCALE);
+			const step = distance * (1 - scale);
 			this._applyDolly(step, pointer);
+			this._dollyVelocity = step;
+		}
+	}
+
+	private _applyKeyZoom(direction: number): void {
+		const center = this._wheelPointer.set(0, 0);
+		const dampingScale = this.enableDamping ? this.dampingFactor : 1;
+		const scale = Math.pow(ZOOM_BASE, this.keyZoomSpeed * direction * dampingScale);
+		const factor = 1 / scale;
+
+		if (this.camera instanceof OrthographicCamera) {
+			this._applyZoom(factor, center);
+			this._zoomVelocity = factor;
+		} else if (this.zoomMode === 'fov') {
+			this._applyFovZoom(factor, center);
+			this._fovVelocity = factor;
+		} else if (this.zoomMode === 'auto') {
+			const distance = this.camera.position.distanceTo(this.pivot);
+			const perspCam = this.camera as PerspectiveCamera;
+			const isZoomIn = direction > 0;
+
+			if (isZoomIn) {
+				if (distance <= this.minDistance + MIN_DISTANCE_BUFFER) {
+					this._applyFovZoom(factor, center);
+					this._fovVelocity = factor;
+				} else {
+					const step = distance * (1 - scale);
+					this._applyDolly(step, center);
+					this._dollyVelocity = step;
+				}
+			} else {
+				if (perspCam.fov < this._baseFov - FOV_EPSILON) {
+					this._applyFovZoom(factor, center, this._baseFov);
+					this._fovVelocity = factor;
+				} else {
+					const step = distance * (1 - scale);
+					this._applyDolly(step, center);
+					this._dollyVelocity = step;
+				}
+			}
+		} else {
+			const distance = this.camera.position.distanceTo(this.pivot);
+			const step = distance * (1 - scale);
+			this._applyDolly(step, center);
 			this._dollyVelocity = step;
 		}
 	}
@@ -604,6 +718,75 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		return Math.sqrt(dx * dx + dy * dy);
 	}
 
+	private _matchAction(action: KeyboardBindings[keyof KeyboardBindings], event: KeyboardEvent): boolean {
+		if (action === false) return false;
+		if ('modifier' in action) return hasModifier(event, (action as { modifier: ModifierKey }).modifier);
+		return hasNoModifier(event);
+	}
+
+	private _onKeyDown(event: KeyboardEvent): void {
+		if (! this.enabled || ! this.enableKeyboard) return;
+
+		const code = event.code;
+		const { LEFT, UP, RIGHT, BOTTOM } = this.keys;
+
+		if (code !== LEFT && code !== UP && code !== RIGHT && code !== BOTTOM) return;
+
+		const bindings = this._keyboardBindings;
+		const isZoom = this._matchAction(bindings.zoom, event);
+
+		if (isZoom) {
+			if (code !== UP && code !== BOTTOM) return;
+
+			event.preventDefault();
+
+			const direction = code === UP ? 1 : - 1;
+			this._applyKeyZoom(direction);
+
+			this.dispatchEvent(_startEvent);
+			this.dispatchEvent(_endEvent);
+			return;
+		}
+
+		const isRotate = this._matchAction(bindings.rotate, event);
+		const isPan = this._matchAction(bindings.pan, event);
+
+		if (! isRotate && ! isPan) return;
+
+		event.preventDefault();
+
+		if (isRotate && ! isPan) {
+			const height = this.domElement?.clientHeight || 600;
+			const rotateAngle = (2 * Math.PI * this.keyRotateSpeed) / height;
+			const pixelDelta = rotateAngle / this.rotateSpeed;
+
+			let dx = 0;
+			let dy = 0;
+
+			if (code === LEFT) dx = pixelDelta;
+			if (code === RIGHT) dx = - pixelDelta;
+			if (code === UP) dy = pixelDelta;
+			if (code === BOTTOM) dy = - pixelDelta;
+
+			this._applyRotate(dx, dy);
+			this._rotateVelocity.set(dx, dy);
+		} else if (isPan) {
+			let dx = 0;
+			let dy = 0;
+
+			if (code === LEFT) dx = this.keyPanSpeed;
+			if (code === RIGHT) dx = - this.keyPanSpeed;
+			if (code === UP) dy = this.keyPanSpeed;
+			if (code === BOTTOM) dy = - this.keyPanSpeed;
+
+			this._applyPan(dx, dy);
+			this._panVelocity.set(dx, dy);
+		}
+
+		this.dispatchEvent(_startEvent);
+		this.dispatchEvent(_endEvent);
+	}
+
 	private _onWheel(event: WheelEvent): void {
 		if (! this.enabled || ! this.domElement) return;
 		event.preventDefault();
@@ -621,4 +804,4 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 }
 
 export { CADCameraControls };
-export type { InputBindings, TouchBindings, MouseButton, ModifierKey, ZoomMode } from './types';
+export type { InputBindings, TouchBindings, KeyboardKeys, KeyboardBindings, MouseButton, ModifierKey, ZoomMode } from './types';

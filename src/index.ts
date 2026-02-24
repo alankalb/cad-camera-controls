@@ -1,2 +1,2 @@
 export { CADCameraControls } from './CADCameraControls';
-export type { InputBindings, TouchBindings, MouseButton, ModifierKey, ZoomMode } from './types';
+export type { InputBindings, TouchBindings, KeyboardKeys, KeyboardBindings, MouseButton, ModifierKey, ZoomMode } from './types';

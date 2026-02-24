@@ -8,6 +8,7 @@ import {
 	createOrthoControls,
 	dispatchPointer,
 	dispatchWheel,
+	dispatchKeyDown,
 	simulateDrag,
 	dispatchTouch,
 	simulateTouchDrag,
@@ -86,7 +87,7 @@ describe('construction and lifecycle', () => {
 		});
 		expect(controls.rotateSpeed).toBe(0.005);
 		expect(controls.panSpeed).toBe(0.0016);
-		expect(controls.zoomSpeed).toBe(0.0012);
+		expect(controls.zoomSpeed).toBe(1);
 		expect(controls.minDistance).toBe(50);
 		expect(controls.maxDistance).toBe(100000);
 		expect(controls.minZoom).toBe(0.01);
@@ -889,7 +890,7 @@ describe('auto zoom', () => {
 		expect(camera.fov).toBe(initialFov);
 		expect(camera.position.distanceTo(controls.pivot)).toBeLessThan(1000);
 
-		for (let i = 0; i < 100; i ++) dispatchWheel(element, - 100);
+		for (let i = 0; i < 2000; i ++) dispatchWheel(element, - 100);
 
 		expect(camera.fov).toBeLessThan(initialFov);
 		controls.dispose();
@@ -940,12 +941,12 @@ describe('auto zoom', () => {
 		const { controls, camera, element } = createControls({ zoomMode: 'auto', minDistance: 950 });
 		const baseFov = camera.fov;
 
-		for (let i = 0; i < 10; i ++) dispatchWheel(element, - 50);
+		for (let i = 0; i < 200; i ++) dispatchWheel(element, - 50);
 
 		const narrowedFov = camera.fov;
 		expect(narrowedFov).toBeLessThan(baseFov);
 
-		for (let i = 0; i < 10; i ++) dispatchWheel(element, 50);
+		for (let i = 0; i < 200; i ++) dispatchWheel(element, 50);
 
 		expect(camera.fov).toBeGreaterThan(narrowedFov);
 		expect(camera.fov).toBeLessThanOrEqual(baseFov + 0.1);
@@ -971,5 +972,584 @@ describe('auto zoom', () => {
 
 		expect(camera.fov).toBeLessThanOrEqual(30 + 0.1);
 		controls.dispose();
+	});
+});
+
+describe('keyboard', () => {
+	it('has correct default keyboard property values', () => {
+		const camera = createCamera();
+		const controls = new CADCameraControls(camera);
+		expect(controls.enableKeyboard).toBe(true);
+		expect(controls.keyboardBindings).toEqual({
+			rotate: { modifier: 'shift' },
+			pan: {},
+			zoom: false,
+		});
+		expect(controls.keyPanSpeed).toBe(7);
+		expect(controls.keyRotateSpeed).toBe(1);
+		expect(controls.keys).toEqual({
+			LEFT: 'ArrowLeft',
+			UP: 'ArrowUp',
+			RIGHT: 'ArrowRight',
+			BOTTOM: 'ArrowDown',
+		});
+		controls.dispose();
+	});
+
+	it('arrow keys pan the camera when no modifier is held', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+		const initialPos = camera.position.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+
+		expect(camera.position.equals(initialPos)).toBe(false);
+		controls.dispose();
+	});
+
+	it('arrow keys rotate the camera when rotate modifier is held (default: shift)', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+		const initialQuat = camera.quaternion.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft', { shiftKey: true });
+
+		expect(camera.quaternion.equals(initialQuat)).toBe(false);
+		controls.dispose();
+	});
+
+	it('bare arrow keys do not rotate when rotate has modifier', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+		const initialQuat = camera.quaternion.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+
+		expect(camera.quaternion.equals(initialQuat)).toBe(true);
+		controls.dispose();
+	});
+
+	it('respects custom keyboardBindings with rotate modifier ctrl', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: {}, zoom: false },
+		});
+		controls.listenToKeyEvents(element);
+
+		const initialQuat = camera.quaternion.clone();
+		dispatchKeyDown(element, 'ArrowRight', { ctrlKey: true });
+		expect(camera.quaternion.equals(initialQuat)).toBe(false);
+
+		controls.dispose();
+	});
+
+	it('respects custom keyboardBindings with pan modifier', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: {}, pan: { modifier: 'alt' }, zoom: false },
+		});
+		controls.listenToKeyEvents(element);
+
+		const quatBefore = camera.quaternion.clone();
+		dispatchKeyDown(element, 'ArrowLeft');
+		expect(camera.quaternion.equals(quatBefore)).toBe(false);
+
+		const posBefore = camera.position.clone();
+		dispatchKeyDown(element, 'ArrowLeft', { altKey: true });
+		expect(camera.position.equals(posBefore)).toBe(false);
+
+		controls.dispose();
+	});
+
+	it('supports both modifiers for rotate and pan', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: false },
+		});
+		controls.listenToKeyEvents(element);
+
+		const quatBefore = camera.quaternion.clone();
+		dispatchKeyDown(element, 'ArrowLeft', { ctrlKey: true });
+		expect(camera.quaternion.equals(quatBefore)).toBe(false);
+
+		const posBefore = camera.position.clone();
+		dispatchKeyDown(element, 'ArrowRight', { shiftKey: true });
+		expect(camera.position.equals(posBefore)).toBe(false);
+
+		controls.dispose();
+	});
+
+	it('ignores bare arrow keys when both bindings have modifiers', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: false },
+		});
+		controls.listenToKeyEvents(element);
+		const initialPos = camera.position.clone();
+		const initialQuat = camera.quaternion.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+		expect(camera.quaternion.equals(initialQuat)).toBe(true);
+		controls.dispose();
+	});
+
+	it('does not respond to keys when enableKeyboard is false', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+		controls.enableKeyboard = false;
+		const initialPos = camera.position.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+		controls.dispose();
+	});
+
+	it('does not respond to keys when enabled is false', () => {
+		const { controls, camera, element } = createControls({ enabled: false });
+		controls.listenToKeyEvents(element);
+		const initialPos = camera.position.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+		controls.dispose();
+	});
+
+	it('does not respond to keys before listenToKeyEvents is called', () => {
+		const { controls, camera, element } = createControls();
+		const initialPos = camera.position.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+		controls.dispose();
+	});
+
+	it('stopListenToKeyEvents removes keyboard listener', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+		controls.stopListenToKeyEvents();
+		const initialPos = camera.position.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+		controls.dispose();
+	});
+
+	it('dispose stops keyboard events', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+		controls.dispose();
+		const initialPos = camera.position.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+	});
+
+	it('larger keyPanSpeed produces larger translation', () => {
+		const slow = createControls();
+		slow.controls.keyPanSpeed = 3;
+		slow.controls.listenToKeyEvents(slow.element);
+		const slowInitial = slow.camera.position.clone();
+		dispatchKeyDown(slow.element, 'ArrowLeft');
+		const slowDelta = slow.camera.position.distanceTo(slowInitial);
+		slow.controls.dispose();
+
+		const fast = createControls();
+		fast.controls.keyPanSpeed = 20;
+		fast.controls.listenToKeyEvents(fast.element);
+		const fastInitial = fast.camera.position.clone();
+		dispatchKeyDown(fast.element, 'ArrowLeft');
+		const fastDelta = fast.camera.position.distanceTo(fastInitial);
+		fast.controls.dispose();
+
+		expect(fastDelta).toBeGreaterThan(slowDelta);
+	});
+
+	it('pan preserves camera orientation', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+		const initialQuat = camera.quaternion.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+		dispatchKeyDown(element, 'ArrowUp');
+
+		expect(camera.quaternion.x).toBeCloseTo(initialQuat.x, 10);
+		expect(camera.quaternion.y).toBeCloseTo(initialQuat.y, 10);
+		expect(camera.quaternion.z).toBeCloseTo(initialQuat.z, 10);
+		expect(camera.quaternion.w).toBeCloseTo(initialQuat.w, 10);
+		controls.dispose();
+	});
+
+	it('rotation preserves camera distance from pivot', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+		const initialDistance = camera.position.distanceTo(controls.pivot);
+
+		dispatchKeyDown(element, 'ArrowLeft', { shiftKey: true });
+
+		expect(camera.position.distanceTo(controls.pivot)).toBeCloseTo(initialDistance, 5);
+		controls.dispose();
+	});
+
+	it('dispatches start, change, and end events', () => {
+		const { controls, element } = createControls();
+		controls.listenToKeyEvents(element);
+		const startFn = vi.fn();
+		const changeFn = vi.fn();
+		const endFn = vi.fn();
+		controls.addEventListener('start', startFn);
+		controls.addEventListener('change', changeFn);
+		controls.addEventListener('end', endFn);
+
+		dispatchKeyDown(element, 'ArrowLeft');
+
+		expect(startFn).toHaveBeenCalledTimes(1);
+		expect(changeFn).toHaveBeenCalledTimes(1);
+		expect(endFn).toHaveBeenCalledTimes(1);
+		controls.dispose();
+	});
+
+	it('keyboard sets velocity for damping after keypress', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+
+		dispatchKeyDown(element, 'ArrowLeft');
+		const posAfterKey = camera.position.clone();
+
+		const changed = controls.update(1 / 60);
+		expect(changed).toBe(true);
+		expect(camera.position.equals(posAfterKey)).toBe(false);
+		controls.dispose();
+	});
+
+	it('ignores non-configured keys', () => {
+		const { controls, camera, element } = createControls();
+		controls.listenToKeyEvents(element);
+		const initialPos = camera.position.clone();
+
+		dispatchKeyDown(element, 'KeyW');
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+		controls.dispose();
+	});
+
+	it('respects custom keys configuration', () => {
+		const { controls, camera, element } = createControls();
+		controls.keys = { LEFT: 'KeyA', UP: 'KeyW', RIGHT: 'KeyD', BOTTOM: 'KeyS' };
+		controls.listenToKeyEvents(element);
+		const initialPos = camera.position.clone();
+
+		dispatchKeyDown(element, 'KeyA');
+
+		expect(camera.position.equals(initialPos)).toBe(false);
+		controls.dispose();
+	});
+
+	it('preventDefault is called on configured keys', () => {
+		const { controls, element } = createControls();
+		controls.listenToKeyEvents(element);
+
+		const event = new KeyboardEvent('keydown', {
+			bubbles: true, cancelable: true, code: 'ArrowLeft',
+		});
+		const spy = vi.spyOn(event, 'preventDefault');
+		element.dispatchEvent(event);
+
+		expect(spy).toHaveBeenCalledTimes(1);
+		controls.dispose();
+	});
+
+	it('all four arrow keys produce movement in different directions', () => {
+		const directions = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+		const positions: Vector3[] = [];
+
+		for (const code of directions) {
+			const { controls, camera, element } = createControls();
+			controls.listenToKeyEvents(element);
+			dispatchKeyDown(element, code);
+			positions.push(camera.position.clone());
+			controls.dispose();
+		}
+
+		for (let i = 0; i < positions.length; i ++) {
+			for (let j = i + 1; j < positions.length; j ++) {
+				expect(positions[i].equals(positions[j])).toBe(false);
+			}
+		}
+	});
+
+	it('has correct default keyZoomSpeed', () => {
+		const camera = createCamera();
+		const controls = new CADCameraControls(camera);
+		expect(controls.keyZoomSpeed).toBe(1);
+		controls.dispose();
+	});
+
+	it('default keyboardBindings has zoom disabled', () => {
+		const camera = createCamera();
+		const controls = new CADCameraControls(camera);
+		expect(controls.keyboardBindings.zoom).toBe(false);
+		controls.dispose();
+	});
+
+	it('zoom modifier + UP zooms in (decreases distance)', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'shift' }, pan: {}, zoom: { modifier: 'ctrl' } },
+		});
+		controls.listenToKeyEvents(element);
+		const initialDistance = camera.position.distanceTo(controls.pivot);
+
+		dispatchKeyDown(element, 'ArrowUp', { ctrlKey: true });
+
+		expect(camera.position.distanceTo(controls.pivot)).toBeLessThan(initialDistance);
+		controls.dispose();
+	});
+
+	it('zoom modifier + DOWN zooms out (increases distance)', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'shift' }, pan: {}, zoom: { modifier: 'ctrl' } },
+		});
+		controls.listenToKeyEvents(element);
+		const initialDistance = camera.position.distanceTo(controls.pivot);
+
+		dispatchKeyDown(element, 'ArrowDown', { ctrlKey: true });
+
+		expect(camera.position.distanceTo(controls.pivot)).toBeGreaterThan(initialDistance);
+		controls.dispose();
+	});
+
+	it('zoom modifier + LEFT/RIGHT does nothing', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'shift' }, pan: {}, zoom: { modifier: 'ctrl' } },
+		});
+		controls.listenToKeyEvents(element);
+		const initialPos = camera.position.clone();
+		const initialQuat = camera.quaternion.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft', { ctrlKey: true });
+		dispatchKeyDown(element, 'ArrowRight', { ctrlKey: true });
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+		expect(camera.quaternion.equals(initialQuat)).toBe(true);
+		controls.dispose();
+	});
+
+	it('larger keyZoomSpeed produces larger zoom', () => {
+		const slow = createControls({
+			keyboardBindings: { rotate: { modifier: 'shift' }, pan: {}, zoom: { modifier: 'ctrl' } },
+			keyZoomSpeed: 0.5,
+		});
+		slow.controls.listenToKeyEvents(slow.element);
+		const slowInitialDist = slow.camera.position.distanceTo(slow.controls.pivot);
+		dispatchKeyDown(slow.element, 'ArrowUp', { ctrlKey: true });
+		const slowDelta = slowInitialDist - slow.camera.position.distanceTo(slow.controls.pivot);
+		slow.controls.dispose();
+
+		const fast = createControls({
+			keyboardBindings: { rotate: { modifier: 'shift' }, pan: {}, zoom: { modifier: 'ctrl' } },
+			keyZoomSpeed: 3,
+		});
+		fast.controls.listenToKeyEvents(fast.element);
+		const fastInitialDist = fast.camera.position.distanceTo(fast.controls.pivot);
+		dispatchKeyDown(fast.element, 'ArrowUp', { ctrlKey: true });
+		const fastDelta = fastInitialDist - fast.camera.position.distanceTo(fast.controls.pivot);
+		fast.controls.dispose();
+
+		expect(fastDelta).toBeGreaterThan(slowDelta);
+	});
+
+	it('keyboard zoom works with orthographic camera (increases camera.zoom)', () => {
+		const { controls, camera, element } = createOrthoControls({
+			keyboardBindings: { rotate: { modifier: 'shift' }, pan: {}, zoom: { modifier: 'ctrl' } },
+		});
+		controls.listenToKeyEvents(element);
+		const initialZoom = camera.zoom;
+
+		dispatchKeyDown(element, 'ArrowUp', { ctrlKey: true });
+
+		expect(camera.zoom).toBeGreaterThan(initialZoom);
+		controls.dispose();
+	});
+
+	it('keyboard zoom works with orthographic camera (decreases camera.zoom)', () => {
+		const { controls, camera, element } = createOrthoControls({
+			keyboardBindings: { rotate: { modifier: 'shift' }, pan: {}, zoom: { modifier: 'ctrl' } },
+		});
+		controls.listenToKeyEvents(element);
+		const initialZoom = camera.zoom;
+
+		dispatchKeyDown(element, 'ArrowDown', { ctrlKey: true });
+
+		expect(camera.zoom).toBeLessThan(initialZoom);
+		controls.dispose();
+	});
+
+	it('keyboard zoom dispatches start and end events', () => {
+		const { controls, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'shift' }, pan: {}, zoom: { modifier: 'ctrl' } },
+		});
+		controls.listenToKeyEvents(element);
+		const startFn = vi.fn();
+		const endFn = vi.fn();
+		controls.addEventListener('start', startFn);
+		controls.addEventListener('end', endFn);
+
+		dispatchKeyDown(element, 'ArrowUp', { ctrlKey: true });
+
+		expect(startFn).toHaveBeenCalledTimes(1);
+		expect(endFn).toHaveBeenCalledTimes(1);
+		controls.dispose();
+	});
+
+	it('keyboard zoom preserves camera orientation', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'shift' }, pan: {}, zoom: { modifier: 'ctrl' } },
+		});
+		controls.listenToKeyEvents(element);
+		const initialQuat = camera.quaternion.clone();
+
+		dispatchKeyDown(element, 'ArrowUp', { ctrlKey: true });
+
+		expect(camera.quaternion.x).toBeCloseTo(initialQuat.x, 10);
+		expect(camera.quaternion.y).toBeCloseTo(initialQuat.y, 10);
+		expect(camera.quaternion.z).toBeCloseTo(initialQuat.z, 10);
+		expect(camera.quaternion.w).toBeCloseTo(initialQuat.w, 10);
+		controls.dispose();
+	});
+
+	it('keyboard zoom does not fire when zoom is disabled', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: false },
+		});
+		controls.listenToKeyEvents(element);
+		const initialPos = camera.position.clone();
+		const initialQuat = camera.quaternion.clone();
+
+		dispatchKeyDown(element, 'ArrowUp', { altKey: true });
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+		expect(camera.quaternion.equals(initialQuat)).toBe(true);
+		controls.dispose();
+	});
+
+	it('bare zoom + UP zooms in when both rotate and pan have modifiers', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: {} },
+		});
+		controls.listenToKeyEvents(element);
+		const initialDistance = camera.position.distanceTo(controls.pivot);
+
+		dispatchKeyDown(element, 'ArrowUp');
+
+		expect(camera.position.distanceTo(controls.pivot)).toBeLessThan(initialDistance);
+		controls.dispose();
+	});
+
+	it('bare zoom + DOWN zooms out when both rotate and pan have modifiers', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: {} },
+		});
+		controls.listenToKeyEvents(element);
+		const initialDistance = camera.position.distanceTo(controls.pivot);
+
+		dispatchKeyDown(element, 'ArrowDown');
+
+		expect(camera.position.distanceTo(controls.pivot)).toBeGreaterThan(initialDistance);
+		controls.dispose();
+	});
+
+	it('bare zoom does not fire when a modifier is held', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: {} },
+		});
+		controls.listenToKeyEvents(element);
+
+		const quatBefore = camera.quaternion.clone();
+		dispatchKeyDown(element, 'ArrowUp', { ctrlKey: true });
+		expect(camera.quaternion.equals(quatBefore)).toBe(false);
+
+		controls.dispose();
+	});
+
+	it('bare zoom + LEFT/RIGHT does nothing', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: {} },
+		});
+		controls.listenToKeyEvents(element);
+		const initialPos = camera.position.clone();
+		const initialQuat = camera.quaternion.clone();
+
+		dispatchKeyDown(element, 'ArrowLeft');
+		dispatchKeyDown(element, 'ArrowRight');
+
+		expect(camera.position.equals(initialPos)).toBe(true);
+		expect(camera.quaternion.equals(initialQuat)).toBe(true);
+		controls.dispose();
+	});
+
+	it('bare zoom dispatches start and end events', () => {
+		const { controls, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: {} },
+		});
+		controls.listenToKeyEvents(element);
+		const startFn = vi.fn();
+		const endFn = vi.fn();
+		controls.addEventListener('start', startFn);
+		controls.addEventListener('end', endFn);
+
+		dispatchKeyDown(element, 'ArrowUp');
+
+		expect(startFn).toHaveBeenCalledTimes(1);
+		expect(endFn).toHaveBeenCalledTimes(1);
+		controls.dispose();
+	});
+
+	it('bare zoom works with orthographic camera', () => {
+		const { controls, camera, element } = createOrthoControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: {} },
+		});
+		controls.listenToKeyEvents(element);
+		const initialZoom = camera.zoom;
+
+		dispatchKeyDown(element, 'ArrowUp');
+
+		expect(camera.zoom).toBeGreaterThan(initialZoom);
+		controls.dispose();
+	});
+
+	it('bare zoom preserves camera orientation', () => {
+		const { controls, camera, element } = createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: {} },
+		});
+		controls.listenToKeyEvents(element);
+		const initialQuat = camera.quaternion.clone();
+
+		dispatchKeyDown(element, 'ArrowUp');
+
+		expect(camera.quaternion.x).toBeCloseTo(initialQuat.x, 10);
+		expect(camera.quaternion.y).toBeCloseTo(initialQuat.y, 10);
+		expect(camera.quaternion.z).toBeCloseTo(initialQuat.z, 10);
+		expect(camera.quaternion.w).toBeCloseTo(initialQuat.w, 10);
+		controls.dispose();
+	});
+
+	it('validates: throws on duplicate modifiers', () => {
+		expect(() => createControls({
+			keyboardBindings: { rotate: { modifier: 'ctrl' }, pan: { modifier: 'ctrl' }, zoom: false },
+		})).toThrow('duplicate modifier');
+	});
+
+	it('validates: throws on two bare actions', () => {
+		expect(() => createControls({
+			keyboardBindings: { rotate: {}, pan: {}, zoom: false },
+		})).toThrow('at most one action can be bare');
+	});
+
+	it('validates: throws on all disabled', () => {
+		expect(() => createControls({
+			keyboardBindings: { rotate: false, pan: false, zoom: false },
+		})).toThrow('at least one action must be active');
 	});
 });

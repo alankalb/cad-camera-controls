@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import GUI from 'lil-gui';
 import { CADCameraControls } from '../src/CADCameraControls';
 import type { ZoomMode } from '../src/types';
-import { buildInputBindings } from './bindings';
+import { buildInputBindings, buildKeyboardBindings } from './bindings';
 import type { ButtonLabel, ModifierLabel } from './bindings';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -91,7 +91,7 @@ const params = {
 	panModifier: 'none' as ModifierLabel,
 	rotateSpeed: 0.005,
 	panSpeed: 0.001,
-	zoomSpeed: 0.005,
+	zoomSpeed: 1,
 	zoomMode: 'dolly' as ZoomMode,
 	minDistance: Math.ceil(1.1 * CUBE_SIZE * Math.sqrt(3) / 2),
 	maxDistance: 100000,
@@ -100,9 +100,17 @@ const params = {
 	minFov: 1,
 	maxFov: 120,
 	preventContextMenu: true,
+	enableKeyboard: true,
+	keyRotateModifier: 'shift' as ModifierLabel,
+	keyPanModifier: 'none' as ModifierLabel,
+	keyZoomModifier: 'ctrl' as ModifierLabel,
+	keyPanSpeed: 7,
+	keyRotateSpeed: 1,
+	keyZoomSpeed: 1,
 };
 
 let controls = new CADCameraControls(camera, renderer.domElement);
+controls.listenToKeyEvents(document.body);
 
 function switchCamera(): void {
 	controls.dispose();
@@ -114,6 +122,7 @@ function switchCamera(): void {
 	}
 
 	controls = new CADCameraControls(camera, renderer.domElement);
+	controls.listenToKeyEvents(document.body);
 	applyControls();
 }
 
@@ -140,10 +149,19 @@ const panModifierCtrl = inputFolder.add(params, 'panModifier', modifierOptions).
 inputFolder.add(params, 'preventContextMenu').onChange(applyControls);
 inputFolder.open();
 
+const keyboardFolder = gui.addFolder('keyboard');
+keyboardFolder.add(params, 'enableKeyboard').name('enable').onChange(applyControls);
+const keyRotateModCtrl = keyboardFolder.add(params, 'keyRotateModifier', modifierOptions).name('rotate modifier').onChange(applyControls);
+const keyPanModCtrl = keyboardFolder.add(params, 'keyPanModifier', modifierOptions).name('pan modifier').onChange(applyControls);
+const keyZoomModCtrl = keyboardFolder.add(params, 'keyZoomModifier', modifierOptions).name('zoom modifier').onChange(applyControls);
+keyboardFolder.add(params, 'keyPanSpeed', 1, 50, 1).name('pan speed').onChange(applyControls);
+keyboardFolder.add(params, 'keyRotateSpeed', 0.1, 5, 0.1).name('rotate speed').onChange(applyControls);
+keyboardFolder.add(params, 'keyZoomSpeed', 0.1, 5, 0.1).name('zoom speed').onChange(applyControls);
+
 const speedFolder = gui.addFolder('speed');
 speedFolder.add(params, 'rotateSpeed', 0.0005, 0.02, 0.0001).onChange(applyControls);
 speedFolder.add(params, 'panSpeed', 0.0001, 0.02, 0.0001).onChange(applyControls);
-speedFolder.add(params, 'zoomSpeed', 0.0001, 0.02, 0.0001).onChange(applyControls);
+speedFolder.add(params, 'zoomSpeed', 0.1, 5, 0.1).onChange(applyControls);
 
 const limitsFolder = gui.addFolder('limits');
 limitsFolder.add(params, 'minDistance', 1, 10000, 1).onChange(applyControls);
@@ -172,6 +190,27 @@ function getInputBindings() {
 	return result.bindings;
 }
 
+function getKeyboardBindings() {
+	const result = buildKeyboardBindings(params.keyRotateModifier, params.keyPanModifier, params.keyZoomModifier);
+
+	if (result.resolvedRotateModifier !== params.keyRotateModifier) {
+		params.keyRotateModifier = result.resolvedRotateModifier;
+		keyRotateModCtrl.updateDisplay();
+	}
+
+	if (result.resolvedPanModifier !== params.keyPanModifier) {
+		params.keyPanModifier = result.resolvedPanModifier;
+		keyPanModCtrl.updateDisplay();
+	}
+
+	if (result.resolvedZoomModifier !== params.keyZoomModifier) {
+		params.keyZoomModifier = result.resolvedZoomModifier;
+		keyZoomModCtrl.updateDisplay();
+	}
+
+	return result.bindings;
+}
+
 function applyBindingsText(): void {
 	const bindings = controls.inputBindings;
 	const rotateText = mouseLabel(bindings.rotate.button);
@@ -179,7 +218,21 @@ function applyBindingsText(): void {
 	const panText = panHasModifier
 		? `${ (bindings.pan as { modifier: string }).modifier }+${ mouseLabel(bindings.pan.button) }`
 		: mouseLabel(bindings.pan.button);
-	bindingsEl.textContent = `rotate: ${ rotateText } | pan: ${ panText } | zoom: mousewheel`;
+
+	const kb = controls.keyboardBindings;
+
+	const actionText = (action: typeof kb.rotate, allKeys: string, subset?: string): string => {
+		if (action === false) return 'off';
+		const keys = subset ?? allKeys;
+		if ('modifier' in action) return `${ (action as { modifier: string }).modifier }+${ keys }`;
+		return keys;
+	};
+
+	const kbRotateText = actionText(kb.rotate, 'arrows');
+	const kbPanText = actionText(kb.pan, 'arrows');
+	const kbZoomText = actionText(kb.zoom, 'arrows', 'up/down');
+
+	bindingsEl.textContent = `rotate: ${ rotateText } | pan: ${ panText } | zoom: mousewheel | keyboard rotate: ${ kbRotateText }, pan: ${ kbPanText }, zoom: ${ kbZoomText }`;
 }
 
 function applyControls(): void {
@@ -200,6 +253,11 @@ function applyControls(): void {
 	controls.minFov = params.minFov;
 	controls.maxFov = params.maxFov;
 	controls.preventContextMenu = params.preventContextMenu;
+	controls.enableKeyboard = params.enableKeyboard;
+	controls.keyboardBindings = getKeyboardBindings();
+	controls.keyPanSpeed = params.keyPanSpeed;
+	controls.keyRotateSpeed = params.keyRotateSpeed;
+	controls.keyZoomSpeed = params.keyZoomSpeed;
 	applyBindingsText();
 }
 

@@ -8,7 +8,7 @@ All interaction orbits around a fixed pivot point — pan moves the camera witho
 - Perspective and orthographic camera support
 - Dolly, FOV, and auto zoom modes
 - Inertial damping
-- Configurable mouse and touch bindings
+- Configurable mouse, touch, and keyboard bindings
 - React Three Fiber wrapper included
 
 [Live Demo](https://alankalb.github.io/cad-camera-controls/)
@@ -52,6 +52,7 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const controls = new CADCameraControls(camera, renderer.domElement);
+controls.listenToKeyEvents(document.body);
 
 const clock = new THREE.Clock();
 
@@ -118,7 +119,7 @@ Smooth inertial deceleration after releasing a drag or scroll. When enabled, you
 
 #### `.dampingFactor` : `number`
 
-Damping friction. Higher values stop the camera faster. Same convention as `OrbitControls`. Default is `0.05`.
+Damping friction in the range `(0, 1)`. Higher values stop the camera faster. Each frame, velocity is multiplied by `(1 - dampingFactor)`. Same convention as `OrbitControls`. Default is `0.05`.
 
 #### `.pivot` : `Vector3`
 
@@ -146,15 +147,15 @@ Default is `{ one: 'rotate', two: 'pan', pinch: true }`.
 
 #### `.rotateSpeed` : `number`
 
-Orbit rotation sensitivity. Default is `0.005`.
+Orbit rotation sensitivity in radians per pixel of mouse/touch drag. With damping enabled, releasing the drag produces a smooth inertial tail that decays by `dampingFactor` per frame. Default is `0.005`.
 
 #### `.panSpeed` : `number`
 
-Pan sensitivity. Default is `0.0016`.
+Pan sensitivity in world-units per pixel per unit-distance from the pivot. The actual pan per pixel of drag is `panSpeed × distance-to-pivot`. With damping enabled, releasing the drag produces a smooth inertial tail. Default is `0.0016`.
 
 #### `.zoomSpeed` : `number`
 
-Scroll and pinch zoom sensitivity. Default is `0.0012`.
+Scroll and pinch zoom speed (exponent multiplier). Zoom per scroll tick is `Math.pow(0.95, zoomSpeed)`. Uses the same convention and default as OrbitControls. With damping enabled, the per-tick exponent is internally scaled so the total zoom (including the inertial tail) matches the formula. Default is `1`.
 
 #### `.zoomMode` : `'dolly' | 'fov' | 'auto'`
 
@@ -170,11 +171,11 @@ controls.zoomMode = 'auto';
 
 #### `.minDistance` : `number`
 
-Minimum camera distance from the pivot. Perspective cameras only. Default is `50`.
+Minimum camera distance from the pivot in world units. Perspective cameras only. Default is `50`.
 
 #### `.maxDistance` : `number`
 
-Maximum camera distance from the pivot. Perspective cameras only. Default is `100000`.
+Maximum camera distance from the pivot in world units. Perspective cameras only. Default is `100000`.
 
 #### `.minZoom` : `number`
 
@@ -195,6 +196,48 @@ Maximum field of view in degrees. Used by `'fov'` and `'auto'` zoom modes. Defau
 #### `.preventContextMenu` : `boolean`
 
 Suppress the browser right-click context menu on the DOM element. Default is `true`.
+
+#### `.enableKeyboard` : `boolean`
+
+Enable or disable keyboard controls. Keyboard listeners must be attached separately with `.listenToKeyEvents()`. Default is `true`.
+
+#### `.keyboardBindings` : `KeyboardBindings`
+
+Keyboard action mapping. Each of `rotate`, `pan`, and `zoom` is either `{ modifier: ModifierKey }` (active with modifier), `{}` (active bare — no modifier), or `false` (disabled). At most one action can be bare, all active modifiers must be unique, and at least one action must be active. These constraints are validated at runtime.
+
+Default is `{ rotate: { modifier: 'shift' }, pan: {}, zoom: false }` (shift+arrows to rotate, bare arrows to pan, zoom disabled).
+
+```ts
+// Bare arrows rotate, ctrl+arrows pan, zoom disabled
+controls.keyboardBindings = { rotate: {}, pan: { modifier: 'ctrl' }, zoom: false };
+
+// All three with modifiers
+controls.keyboardBindings = { rotate: { modifier: 'shift' }, pan: { modifier: 'ctrl' }, zoom: { modifier: 'alt' } };
+
+// Bare UP/DOWN to zoom (only valid when both rotate and pan have modifiers)
+controls.keyboardBindings = { rotate: { modifier: 'ctrl' }, pan: { modifier: 'shift' }, zoom: {} };
+```
+
+#### `.keyPanSpeed` : `number`
+
+Screen pixels of simulated mouse drag per arrow key press for panning. The actual world-space movement depends on `panSpeed` and camera distance from the pivot. With damping enabled, each keypress produces a smooth ease-in/ease-out motion. Default is `7`.
+
+#### `.keyRotateSpeed` : `number`
+
+Rotation speed for arrow key rotation. The rotation angle per keypress is `2π × keyRotateSpeed / domElement.clientHeight` radians. With damping enabled, each keypress produces a smooth ease-in/ease-out motion. Default is `1`.
+
+#### `.keyZoomSpeed` : `number`
+
+Zoom speed for keyboard zoom (UP/DOWN). Uses the same formula as scroll zoom: `Math.pow(0.95, keyZoomSpeed)` per keypress. With damping enabled, each keypress produces a smooth ease-in/ease-out motion. Only applies when `keyboardBindings.zoom` is not `false`. Default is `1`.
+
+#### `.keys` : `KeyboardKeys`
+
+Key code mapping for arrow controls. Default is `{ LEFT: 'ArrowLeft', UP: 'ArrowUp', RIGHT: 'ArrowRight', BOTTOM: 'ArrowDown' }`.
+
+```ts
+// Remap to WASD
+controls.keys = { LEFT: 'KeyA', UP: 'KeyW', RIGHT: 'KeyD', BOTTOM: 'KeyS' };
+```
 
 ---
 
@@ -221,6 +264,18 @@ Advance damping and apply camera transforms. Required every frame when `enableDa
 #### `.resetBaseFov() : void`
 
 Recapture the camera's current FOV as the base for `'auto'` zoom mode. Call this after changing `camera.fov` programmatically.
+
+#### `.listenToKeyEvents( domElement : HTMLElement ) : void`
+
+Attach keyboard listeners to the given DOM element. Which modifier triggers rotate vs. pan is controlled by `.keyboardBindings`.
+
+```ts
+controls.listenToKeyEvents(document.body);
+```
+
+#### `.stopListenToKeyEvents() : void`
+
+Remove keyboard listeners. Called automatically by `.dispose()`.
 
 ---
 
