@@ -103,7 +103,7 @@ const params = {
 	enableKeyboard: true,
 	keyRotateModifier: 'shift' as ModifierLabel,
 	keyPanModifier: 'none' as ModifierLabel,
-	keyZoomModifier: 'ctrl' as ModifierLabel,
+	keyZoomModifier: 'meta' as ModifierLabel,
 	keyPanSpeed: 7,
 	keyRotateSpeed: 1,
 	keyZoomSpeed: 1,

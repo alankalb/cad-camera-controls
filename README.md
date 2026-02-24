@@ -169,6 +169,10 @@ Zoom strategy for perspective cameras. Has no effect on orthographic cameras. De
 controls.zoomMode = 'auto';
 ```
 
+#### `.autoFovAnchorScale` : `number`
+
+Scales the cursor-anchored position shift during FOV zoom in `'auto'` mode. At `1`, full cursor tracking (camera shifts to keep the zoom centered on the cursor). At `0`, no cursor tracking (camera stays stationary during FOV zoom). Only applies when `zoomMode` is `'auto'`. Default is `0.1`.
+
 #### `.minDistance` : `number`
 
 Minimum camera distance from the pivot in world units. Perspective cameras only. Default is `50`.

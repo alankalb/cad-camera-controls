@@ -22,6 +22,7 @@ const FOV_EPSILON = 0.01;
 const ZOOM_BASE = 0.95;
 const MIN_DISTANCE_BUFFER = 1;
 const PINCH_SCALE = 0.25;
+const DEFAULT_AUTO_FOV_ANCHOR_SCALE = 0.1;
 const MIN_DAMPING = 0.0001;
 
 const DEFAULT_DAMPING_FACTOR = 0.05;
@@ -118,6 +119,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	zoomMode: ZoomMode;
 	minFov: number;
 	maxFov: number;
+	autoFovAnchorScale: number;
 	preventContextMenu: boolean;
 	enableKeyboard: boolean;
 	keyPanSpeed: number;
@@ -174,6 +176,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this.zoomMode = 'dolly';
 		this.minFov = DEFAULT_MIN_FOV;
 		this.maxFov = DEFAULT_MAX_FOV;
+		this.autoFovAnchorScale = DEFAULT_AUTO_FOV_ANCHOR_SCALE;
 		this.preventContextMenu = true;
 		this.enableKeyboard = true;
 		this._keyboardBindings = { rotate: { modifier: 'shift' }, pan: {}, zoom: false };
@@ -370,6 +373,18 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	private _applyDolly(step: number, pointer: Vector2): void {
 		if (this.camera instanceof OrthographicCamera) return;
 
+		if (step > 0) {
+			const currentDistance = this.camera.position.distanceTo(this.pivot);
+			if (currentDistance <= this.minDistance + STOP_EPSILON) {
+				if (this.zoomMode === 'auto') {
+					const scale = 1 - this._dollyVelocity / this.minDistance;
+					if (scale > 0) this._fovVelocity = 1 / scale;
+				}
+				this._dollyVelocity = 0;
+				return;
+			}
+		}
+
 		this._raycaster.setFromCamera(pointer, this.camera);
 		const rayDir = this._raycaster.ray.direction;
 		const forward = this._dir2;
@@ -439,7 +454,9 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 			const hasAfter = intersectRayWithPlane(camera.position, afterRayDir, this.pivot, forward, after);
 
 			if (hasAfter) {
-				camera.position.add(before).sub(after);
+				const shift = before.sub(after);
+				if (this.zoomMode === 'auto') shift.multiplyScalar(this.autoFovAnchorScale);
+				camera.position.add(shift);
 				camera.updateMatrixWorld();
 			}
 		}
