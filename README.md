@@ -119,7 +119,7 @@ Smooth inertial deceleration after releasing a drag or scroll. When enabled, you
 
 #### `.dampingFactor` : `number`
 
-Damping friction in the range `(0, 1)`. Higher values stop the camera faster. Each frame, velocity is multiplied by `(1 - dampingFactor)`. Same convention as `OrbitControls`. Default is `0.05`.
+Damping friction in the range `(0, 1)`. Higher values stop the camera faster. Each frame, velocity is multiplied by `(1 - dampingFactor)`. Controls the smoothness of acceleration and deceleration without affecting zoom or pan magnitude. Default is `0.2`.
 
 #### `.pivot` : `Vector3`
 
@@ -155,7 +155,7 @@ Pan sensitivity in world-units per pixel per unit-distance from the pivot. The a
 
 #### `.zoomSpeed` : `number`
 
-Scroll and pinch zoom speed (exponent multiplier). Zoom per scroll tick is `Math.pow(0.95, zoomSpeed)`. Uses the same convention and default as OrbitControls. With damping enabled, the per-tick exponent is internally scaled so the total zoom (including the inertial tail) matches the formula. Default is `1`.
+Scroll and pinch zoom speed (exponent multiplier). Zoom per scroll tick is `Math.pow(0.99, zoomSpeed)`. With damping enabled, each tick produces a smooth inertial tail. Default is `1`.
 
 #### `.zoomMode` : `'dolly' | 'fov' | 'auto'`
 
@@ -232,7 +232,7 @@ Rotation speed for arrow key rotation. The rotation angle per keypress is `2π �
 
 #### `.keyZoomSpeed` : `number`
 
-Zoom speed for keyboard zoom (UP/DOWN). Uses the same formula as scroll zoom: `Math.pow(0.95, keyZoomSpeed)` per keypress. With damping enabled, each keypress produces a smooth ease-in/ease-out motion. Only applies when `keyboardBindings.zoom` is not `false`. Default is `1`.
+Zoom speed for keyboard zoom (UP/DOWN). Uses the same formula as scroll zoom: `Math.pow(0.99, keyZoomSpeed)` per keypress. With damping enabled, each keypress produces a smooth ease-in/ease-out motion. Only applies when `keyboardBindings.zoom` is not `false`. Default is `1`.
 
 #### `.keys` : `KeyboardKeys`
 
@@ -268,6 +268,73 @@ Advance damping and apply camera transforms. Required every frame when `enableDa
 #### `.resetBaseFov() : void`
 
 Recapture the camera's current FOV as the base for `'auto'` zoom mode. Call this after changing `camera.fov` programmatically.
+
+#### `.fitToBox( box : Box3, enableTransition? : boolean, padding? : number ) : Promise<void>`
+
+Move the camera to frame the given axis-aligned bounding box. The camera keeps its current orientation and the pivot is not modified. Returns a Promise that resolves when the transition completes.
+
+**box** — The `Box3` to frame. Empty or degenerate boxes are ignored.
+
+**enableTransition** — Animate over 0.5 s with ease-in-out. Default is `true`. Pass `false` to snap instantly.
+
+**padding** — Fractional padding around the object. `0.1` means the object occupies roughly 90 % of the viewport with ~5 % margin on each side. Default is `0`. Negative values are clamped to `0`.
+
+For perspective cameras, the camera dollies along its forward axis so the box fills the viewport. Distance is clamped to `minDistance` / `maxDistance`. For orthographic cameras, `camera.zoom` is adjusted and clamped to `minZoom` / `maxZoom`.
+
+Any active transition is cancelled by user interaction (pointer, wheel, keyboard) or by calling another fit method.
+
+```ts
+const box = new THREE.Box3().setFromObject(mesh);
+await controls.fitToBox(box);                // animated, no padding
+await controls.fitToBox(box, true, 0.1);     // animated, 10% padding
+controls.fitToBox(box, false, 0.2);           // instant snap, 20% padding
+```
+
+#### `.fitToSphere( sphere : Sphere, enableTransition? : boolean, padding? : number ) : Promise<void>`
+
+Move the camera to frame the given bounding sphere. Behaves like `fitToBox` but uses the sphere's radius for distance calculations.
+
+**sphere** — The `Sphere` to frame. Zero or negative radius is ignored.
+
+**enableTransition** — Animate over 0.5 s with ease-in-out. Default is `true`. Pass `false` to snap instantly.
+
+**padding** — Fractional padding around the object. Default is `0`. Negative values are clamped to `0`.
+
+```ts
+const sphere = new THREE.Sphere();
+new THREE.Box3().setFromObject(mesh).getBoundingSphere(sphere);
+await controls.fitToSphere(sphere);               // no padding
+await controls.fitToSphere(sphere, true, 0.1);    // 10% padding
+```
+
+#### `.setView( position : Vector3, quaternion : Quaternion, enableTransition? : boolean, options? : { zoom?, fov? } ) : Promise<void>`
+
+Move the camera to a specific position and orientation. Returns a Promise that resolves when the transition completes. Useful for view-cube snaps, saved views, and any programmatic camera placement.
+
+**position** — Target camera position.
+
+**quaternion** — Target camera orientation.
+
+**enableTransition** — Animate over 0.5 s with ease-in-out. Default is `true`. Pass `false` to snap instantly.
+
+**options.zoom** — Target `camera.zoom` for orthographic cameras. If omitted, current zoom is kept.
+
+**options.fov** — Target `camera.fov` for perspective cameras. If omitted, current FOV is kept.
+
+The pivot is not modified. Orientation is interpolated via quaternion slerp (shortest-path). Any active transition is cancelled by user interaction or by calling another transition method.
+
+```ts
+// View-cube "Front" snap
+const frontPos = new THREE.Vector3(0, 0, 500);
+const frontQuat = new THREE.Quaternion(); // identity = looking along -Z
+await controls.setView(frontPos, frontQuat);
+
+// Restore a saved view with zoom
+await controls.setView(savedPos, savedQuat, true, { zoom: 2.5 });
+
+// Instant snap, no animation
+controls.setView(pos, quat, false);
+```
 
 #### `.listenToKeyEvents( domElement : HTMLElement ) : void`
 

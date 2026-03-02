@@ -67,7 +67,7 @@ function createOrthographicCamera(): THREE.OrthographicCamera {
 		ORTHO_FRUSTUM * aspect / 2,
 		ORTHO_FRUSTUM / 2,
 		- ORTHO_FRUSTUM / 2,
-		CAMERA_NEAR,
+		- CAMERA_FAR,
 		CAMERA_FAR
 	);
 	cam.position.set(0, 0, CAMERA_DISTANCE);
@@ -82,7 +82,7 @@ const params = {
 	cameraType: 'Perspective' as string,
 	enabled: true,
 	enableDamping: true,
-	dampingFactor: 0.05,
+	dampingFactor: 0.2,
 	pivotX: 0,
 	pivotY: 0,
 	pivotZ: 0,
@@ -92,7 +92,7 @@ const params = {
 	rotateSpeed: 0.005,
 	panSpeed: 0.001,
 	zoomSpeed: 1,
-	zoomMode: 'dolly' as ZoomMode,
+	zoomMode: 'auto' as ZoomMode,
 	minDistance: Math.ceil(1.1 * CUBE_SIZE * Math.sqrt(3) / 2),
 	maxDistance: 100000,
 	minZoom: 0.01,
@@ -162,6 +162,90 @@ const speedFolder = gui.addFolder('speed');
 speedFolder.add(params, 'rotateSpeed', 0.0005, 0.02, 0.0001).onChange(applyControls);
 speedFolder.add(params, 'panSpeed', 0.0001, 0.02, 0.0001).onChange(applyControls);
 speedFolder.add(params, 'zoomSpeed', 0.1, 5, 0.1).onChange(applyControls);
+
+// Fit & Views
+
+const fitViewFolder = gui.addFolder('fit & views');
+
+fitViewFolder.add({ fitToBox: () => {
+	const box = new THREE.Box3().setFromObject(cube);
+	controls.fitToBox(box, true, 0.1);
+} }, 'fitToBox').name('fit to box');
+
+fitViewFolder.add({ fitToSphere: () => {
+	const sphere = new THREE.Sphere();
+	new THREE.Box3().setFromObject(cube).getBoundingSphere(sphere);
+	controls.fitToSphere(sphere, true, 0.1);
+} }, 'fitToSphere').name('fit to sphere');
+
+// Saved views
+
+const savedViews: { position: THREE.Vector3; quaternion: THREE.Quaternion; fov: number; zoom: number }[] = [];
+
+fitViewFolder.add({ saveView: () => {
+	savedViews.push({
+		position: camera.position.clone(),
+		quaternion: camera.quaternion.clone(),
+		fov: camera instanceof THREE.PerspectiveCamera ? camera.fov : 50,
+		zoom: camera instanceof THREE.OrthographicCamera ? camera.zoom : 1,
+	});
+	rebuildViewButtons();
+} }, 'saveView').name('save view');
+
+function rebuildViewButtons(): void {
+	// Remove old view buttons
+	for (const ctrl of viewButtonControllers) {
+		ctrl.destroy();
+	}
+	viewButtonControllers.length = 0;
+
+	for (let i = 0; i < savedViews.length; i ++) {
+		const view = savedViews[i];
+		const obj = { [`view${ i }`]: () => {
+			controls.setView(view.position, view.quaternion, true, {
+				fov: view.fov,
+				zoom: view.zoom,
+			});
+		} };
+		const ctrl = fitViewFolder.add(obj, `view${ i }`).name(`restore ${ i + 1 }`);
+		viewButtonControllers.push(ctrl);
+	}
+}
+
+const viewButtonControllers: ReturnType<typeof fitViewFolder.add>[] = [];
+
+// Preset orientation views
+
+const PRESET_DISTANCE = CAMERA_DISTANCE;
+
+fitViewFolder.add({ front: () => {
+	const pos = new THREE.Vector3(0, 0, PRESET_DISTANCE);
+	const quat = new THREE.Quaternion();
+	controls.setView(pos, quat);
+} }, 'front').name('front');
+
+fitViewFolder.add({ top: () => {
+	const pos = new THREE.Vector3(0, PRESET_DISTANCE, 0);
+	const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), - Math.PI / 2);
+	controls.setView(pos, quat);
+} }, 'top').name('top');
+
+fitViewFolder.add({ right: () => {
+	const pos = new THREE.Vector3(PRESET_DISTANCE, 0, 0);
+	const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+	controls.setView(pos, quat);
+} }, 'right').name('right');
+
+fitViewFolder.add({ iso: () => {
+	const d = PRESET_DISTANCE / Math.sqrt(3);
+	const pos = new THREE.Vector3(d, d, d);
+	const quat = new THREE.Quaternion().setFromRotationMatrix(
+		new THREE.Matrix4().lookAt(pos, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0))
+	);
+	controls.setView(pos, quat);
+} }, 'iso').name('isometric');
+
+fitViewFolder.open();
 
 const limitsFolder = gui.addFolder('limits');
 limitsFolder.add(params, 'minDistance', 1, 10000, 1).onChange(applyControls);

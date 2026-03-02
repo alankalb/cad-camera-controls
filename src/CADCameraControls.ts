@@ -1,10 +1,12 @@
 import {
+	Box3,
 	EventDispatcher,
 	MathUtils,
 	PerspectiveCamera,
 	OrthographicCamera,
 	Quaternion,
 	Raycaster,
+	Sphere,
 	Vector2,
 	Vector3,
 } from 'three';
@@ -19,13 +21,13 @@ const PLANE_EPSILON = 1e-6;
 const STOP_EPSILON = 0.01;
 const ZOOM_STOP_EPSILON = 0.0001;
 const FOV_EPSILON = 0.01;
-const ZOOM_BASE = 0.95;
+const ZOOM_BASE = 0.99;
 const MIN_DISTANCE_BUFFER = 1;
 const PINCH_SCALE = 0.25;
 const DEFAULT_AUTO_FOV_ANCHOR_SCALE = 0.1;
 const MIN_DAMPING = 0.0001;
 
-const DEFAULT_DAMPING_FACTOR = 0.05;
+const DEFAULT_DAMPING_FACTOR = 0.2;
 const DEFAULT_KEY_PAN_SPEED = 7;
 const DEFAULT_KEY_ROTATE_SPEED = 1;
 const DEFAULT_KEY_ZOOM_SPEED = 1;
@@ -38,6 +40,7 @@ const DEFAULT_MIN_ZOOM = 0.01;
 const DEFAULT_MAX_ZOOM = 1000;
 const DEFAULT_MIN_FOV = 1;
 const DEFAULT_MAX_FOV = 120;
+const DEFAULT_TRANSITION_DURATION = 0.5;
 
 function hasModifier(event: PointerEvent | KeyboardEvent, key: ModifierKey): boolean {
 	if (key === 'ctrl') return event.ctrlKey;
@@ -93,6 +96,10 @@ function intersectRayWithPlane(
 
 	out.copy(rayOrigin).addScaledVector(rayDirection, t);
 	return true;
+}
+
+function smoothstep(t: number): number {
+	return t * t * (3 - 2 * t);
 }
 
 const _changeEvent = { type: 'change' } as const;
@@ -153,6 +160,26 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	private _keyboardBindings: KeyboardBindings;
 	private _pinchDistance: number;
 	private _keyboardElement: HTMLElement | null;
+	private _transition: {
+		startPosition: Vector3;
+		endPosition: Vector3;
+		startQuaternion: Quaternion;
+		endQuaternion: Quaternion;
+		slerp: boolean;
+		startZoom: number;
+		endZoom: number;
+		startFov: number;
+		endFov: number;
+		elapsed: number;
+		duration: number;
+		resolve: () => void;
+	} | null;
+	private _transitionStartPos: Vector3;
+	private _transitionEndPos: Vector3;
+	private _transitionStartQuat: Quaternion;
+	private _transitionEndQuat: Quaternion;
+	private _fitCenter: Vector3;
+	private _fitSize: Vector3;
 
 	constructor(camera: PerspectiveCamera | OrthographicCamera, domElement?: HTMLElement) {
 		super();
@@ -210,6 +237,13 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this._pointers = [];
 		this._pinchDistance = 0;
 		this._keyboardElement = null;
+		this._transition = null;
+		this._transitionStartPos = new Vector3();
+		this._transitionEndPos = new Vector3();
+		this._transitionStartQuat = new Quaternion();
+		this._transitionEndQuat = new Quaternion();
+		this._fitCenter = new Vector3();
+		this._fitSize = new Vector3();
 
 		this._onContextMenu = this._onContextMenu.bind(this);
 		this._onPointerDown = this._onPointerDown.bind(this);
@@ -269,6 +303,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	}
 
 	dispose(): void {
+		this._cancelTransition();
 		this.stopListenToKeyEvents();
 		this.disconnect();
 		this.domElement = null;
@@ -288,7 +323,89 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this._baseFov = (this.camera as PerspectiveCamera).fov;
 	}
 
+	fitToBox(box: Box3, enableTransition: boolean = true, padding: number = 0): Promise<void> {
+		if (box.isEmpty()) return Promise.resolve();
+
+		const center = this._fitCenter;
+		const size = this._fitSize;
+		box.getCenter(center);
+		box.getSize(size);
+
+		if (size.x === 0 && size.y === 0 && size.z === 0) return Promise.resolve();
+
+		const paddingScale = 1 + Math.max(0, padding);
+		const forward = this._dir2;
+		this.camera.getWorldDirection(forward);
+		const right = this._right.copy(CAMERA_RIGHT).applyQuaternion(this.camera.quaternion).normalize();
+		const up = this._up.copy(CAMERA_UP).applyQuaternion(this.camera.quaternion).normalize();
+		const projWidth = Math.abs(size.dot(right));
+		const projHeight = Math.abs(size.dot(up));
+
+		if (this.camera instanceof OrthographicCamera) {
+			const width = Math.max(projWidth, 0.001) * paddingScale;
+			const height = Math.max(projHeight, 0.001) * paddingScale;
+
+			return this._fitOrtho(center, forward, width, height, enableTransition);
+		} else {
+			const camera = this.camera as PerspectiveCamera;
+			const fov = camera.getEffectiveFOV() * MathUtils.DEG2RAD;
+			const projDepth = Math.abs(size.dot(forward));
+
+			const heightToFit = ((projWidth / projHeight) < camera.aspect ? projHeight : projWidth / camera.aspect) * paddingScale;
+			const distance = MathUtils.clamp(
+				heightToFit * 0.5 / Math.tan(fov * 0.5) + projDepth * 0.5,
+				this.minDistance, this.maxDistance
+			);
+
+			return this._fitPerspective(center, forward, distance, camera.fov, enableTransition);
+		}
+	}
+
+	fitToSphere(sphere: Sphere, enableTransition: boolean = true, padding: number = 0): Promise<void> {
+		if (sphere.radius <= 0) return Promise.resolve();
+
+		const paddingScale = 1 + Math.max(0, padding);
+		const center = this._fitCenter.copy(sphere.center);
+		const forward = this._dir2;
+		this.camera.getWorldDirection(forward);
+		const diameter = sphere.radius * 2 * paddingScale;
+
+		if (this.camera instanceof OrthographicCamera) {
+			return this._fitOrtho(center, forward, diameter, diameter, enableTransition);
+		} else {
+			const camera = this.camera as PerspectiveCamera;
+			const vFOV = camera.getEffectiveFOV() * MathUtils.DEG2RAD;
+			const hFOV = 2 * Math.atan(Math.tan(vFOV * 0.5) * camera.aspect);
+			const fov = camera.aspect >= 1 ? vFOV : hFOV;
+
+			const distance = MathUtils.clamp(
+				(sphere.radius * paddingScale) / Math.sin(fov * 0.5),
+				this.minDistance, this.maxDistance
+			);
+
+			return this._fitPerspective(center, forward, distance, camera.fov, enableTransition);
+		}
+	}
+
+	setView(
+		position: Vector3,
+		quaternion: Quaternion,
+		enableTransition: boolean = true,
+		options?: { zoom?: number; fov?: number }
+	): Promise<void> {
+		const endPos = this._transitionEndPos.copy(position);
+		const endZoom = options?.zoom ?? (this.camera instanceof OrthographicCamera ? this.camera.zoom : 1);
+		const endFov = options?.fov ?? (this.camera instanceof PerspectiveCamera ? this.camera.fov : 50);
+
+		return this._startTransition(endPos, endZoom, endFov, enableTransition, quaternion);
+	}
+
 	update(deltaSeconds: number = 1 / 60): boolean {
+		if (this._transition) {
+			this._updateTransition(deltaSeconds);
+			return true;
+		}
+
 		if (! this.enabled || ! this.enableDamping || this._drag.isDragging) return false;
 
 		const deltaFrames = Math.max(0.001, deltaSeconds * 60);
@@ -330,6 +447,118 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		return changed;
 	}
 
+	private _fitOrtho(center: Vector3, forward: Vector3, width: number, height: number, enableTransition: boolean): Promise<void> {
+		const camera = this.camera as OrthographicCamera;
+		const baseWidth = (camera.right - camera.left) / camera.zoom;
+		const baseHeight = (camera.top - camera.bottom) / camera.zoom;
+		const targetZoom = MathUtils.clamp(
+			Math.min(baseWidth / width, baseHeight / height),
+			this.minZoom, this.maxZoom
+		);
+		const endPos = this._transitionEndPos.copy(center).addScaledVector(forward, - camera.position.distanceTo(center));
+
+		return this._startTransition(endPos, targetZoom, 50, enableTransition);
+	}
+
+	private _fitPerspective(center: Vector3, forward: Vector3, distance: number, fov: number, enableTransition: boolean): Promise<void> {
+		const endPos = this._transitionEndPos.copy(center).addScaledVector(forward, - distance);
+
+		return this._startTransition(endPos, 1, fov, enableTransition);
+	}
+
+	private _cancelTransition(): void {
+		if (this._transition) {
+			this._transition.resolve();
+			this._transition = null;
+		}
+	}
+
+	private _startTransition(endPosition: Vector3, endZoom: number, endFov: number, enableTransition: boolean, endQuaternion?: Quaternion): Promise<void> {
+		this._cancelTransition();
+
+		// Zero all velocities so damping doesn't fight the transition
+		this._rotateVelocity.set(0, 0);
+		this._panVelocity.set(0, 0);
+		this._dollyVelocity = 0;
+		this._zoomVelocity = 1;
+		this._fovVelocity = 1;
+
+		if (! enableTransition) {
+			// Snap immediately
+			this.camera.position.copy(endPosition);
+			if (endQuaternion) this.camera.quaternion.copy(endQuaternion);
+			if (this.camera instanceof OrthographicCamera) {
+				this.camera.zoom = endZoom;
+				this.camera.updateProjectionMatrix();
+			} else if (this.camera instanceof PerspectiveCamera && endFov !== this.camera.fov) {
+				this.camera.fov = endFov;
+				this.camera.updateProjectionMatrix();
+			}
+			this.camera.updateMatrixWorld();
+			this.dispatchEvent(_changeEvent);
+			return Promise.resolve();
+		}
+
+		return new Promise<void>((resolve) => {
+			this._transition = {
+				startPosition: this._transitionStartPos.copy(this.camera.position),
+				endPosition: this._transitionEndPos.copy(endPosition),
+				startQuaternion: this._transitionStartQuat.copy(this.camera.quaternion),
+				endQuaternion: endQuaternion
+					? this._transitionEndQuat.copy(endQuaternion)
+					: this._transitionEndQuat.copy(this.camera.quaternion),
+				slerp: !! endQuaternion,
+				startZoom: this.camera instanceof OrthographicCamera ? this.camera.zoom : 1,
+				endZoom: endZoom,
+				startFov: this.camera instanceof PerspectiveCamera ? this.camera.fov : 50,
+				endFov: endFov,
+				elapsed: 0,
+				duration: DEFAULT_TRANSITION_DURATION,
+				resolve,
+			};
+		});
+	}
+
+	private _updateTransition(deltaSeconds: number): void {
+		const t = this._transition!;
+		t.elapsed += deltaSeconds;
+		const progress = MathUtils.clamp(t.elapsed / t.duration, 0, 1);
+		const eased = smoothstep(progress);
+
+		this.camera.position.lerpVectors(t.startPosition, t.endPosition, eased);
+
+		if (t.slerp) {
+			this.camera.quaternion.slerpQuaternions(t.startQuaternion, t.endQuaternion, eased);
+		}
+
+		if (this.camera instanceof OrthographicCamera) {
+			this.camera.zoom = MathUtils.lerp(t.startZoom, t.endZoom, eased);
+			this.camera.updateProjectionMatrix();
+		} else if (this.camera instanceof PerspectiveCamera) {
+			this.camera.fov = MathUtils.lerp(t.startFov, t.endFov, eased);
+			this.camera.updateProjectionMatrix();
+		}
+
+		this.camera.updateMatrixWorld();
+		this.dispatchEvent(_changeEvent);
+
+		if (progress >= 1) {
+			// Snap to exact end values
+			this.camera.position.copy(t.endPosition);
+			if (t.slerp) this.camera.quaternion.copy(t.endQuaternion);
+			if (this.camera instanceof OrthographicCamera) {
+				this.camera.zoom = t.endZoom;
+				this.camera.updateProjectionMatrix();
+			} else if (this.camera instanceof PerspectiveCamera) {
+				this.camera.fov = t.endFov;
+				this.camera.updateProjectionMatrix();
+			}
+			this.camera.updateMatrixWorld();
+			t.resolve();
+			this._transition = null;
+		}
+	}
+
 	private _applyRotate(dx: number, dy: number): void {
 		const offset = this._offset.copy(this.camera.position).sub(this.pivot);
 		const yawQ = this._yawQ.setFromAxisAngle(WORLD_UP, - dx * this.rotateSpeed);
@@ -350,7 +579,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		let worldPerPixel: number;
 
 		if (this.camera instanceof OrthographicCamera) {
-			worldPerPixel = this.panSpeed / this.camera.zoom;
+			const visibleHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
+			worldPerPixel = visibleHeight * this.panSpeed;
 		} else if (this.zoomMode === 'fov' || this.zoomMode === 'auto') {
 			const distance = this.camera.position.distanceTo(this.pivot);
 			const halfFovRad = MathUtils.degToRad((this.camera as PerspectiveCamera).fov / 2);
@@ -466,8 +696,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 	private _applyScrollZoom(rawDelta: number, factorScale: number, pointer: Vector2): void {
 		const normalizedDelta = rawDelta * 0.01;
-		const dampingScale = this.enableDamping ? this.dampingFactor : 1;
-		const scale = Math.pow(ZOOM_BASE, this.zoomSpeed * normalizedDelta * factorScale * dampingScale);
+		const scale = Math.pow(ZOOM_BASE, this.zoomSpeed * normalizedDelta * factorScale);
 		const factor = 1 / scale;
 
 		if (this.camera instanceof OrthographicCamera) {
@@ -510,8 +739,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 	private _applyKeyZoom(direction: number): void {
 		const center = this._wheelPointer.set(0, 0);
-		const dampingScale = this.enableDamping ? this.dampingFactor : 1;
-		const scale = Math.pow(ZOOM_BASE, this.keyZoomSpeed * direction * dampingScale);
+		const scale = Math.pow(ZOOM_BASE, this.keyZoomSpeed * direction);
 		const factor = 1 / scale;
 
 		if (this.camera instanceof OrthographicCamera) {
@@ -558,6 +786,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 	private _onPointerDown(event: PointerEvent): void {
 		if (! this.enabled) return;
+
+		this._cancelTransition();
 
 		if (event.pointerType === 'touch') {
 			event.preventDefault();
@@ -744,6 +974,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	private _onKeyDown(event: KeyboardEvent): void {
 		if (! this.enabled || ! this.enableKeyboard) return;
 
+		this._cancelTransition();
+
 		const code = event.code;
 		const { LEFT, UP, RIGHT, BOTTOM } = this.keys;
 
@@ -807,6 +1039,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	private _onWheel(event: WheelEvent): void {
 		if (! this.enabled || ! this.domElement) return;
 		event.preventDefault();
+
+		this._cancelTransition();
 
 		const el = this.domElement;
 		const rect = el.getBoundingClientRect();
