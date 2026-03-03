@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import GUI from 'lil-gui';
 import { CADCameraControls } from '../src/CADCameraControls';
 import type { ZoomMode } from '../src/types';
@@ -31,7 +32,6 @@ scene.add(directional);
 const GRID_SIZE = 4000;
 const GRID_DIVISIONS = 40;
 const AXES_SIZE = 300;
-const CUBE_SIZE = 120;
 const CAMERA_FOV = 50;
 const CAMERA_NEAR = 0.1;
 const CAMERA_FAR = 200000;
@@ -44,11 +44,23 @@ scene.add(grid);
 const axes = new THREE.AxesHelper(AXES_SIZE);
 scene.add(axes);
 
-const cube = new THREE.Mesh(
-	new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE),
-	new THREE.MeshNormalMaterial()
-);
-scene.add(cube);
+let model: THREE.Mesh | null = null;
+
+// Load teapot STL
+new STLLoader().loadAsync('/teapot.stl').then((geometry) => {
+	geometry.center();
+	geometry.rotateX(- Math.PI / 2);
+	geometry.computeBoundingBox();
+	model = new THREE.Mesh(geometry, new THREE.MeshNormalMaterial());
+	scene.add(model);
+
+	// Update minDistance based on loaded model size
+	const box = geometry.boundingBox!;
+	const size = box.getSize(new THREE.Vector3());
+	const diagonal = size.length();
+	params.minDistance = Math.ceil(diagonal * 0.6);
+	applyControls();
+});
 
 // Camera
 
@@ -92,9 +104,9 @@ const params = {
 	rotateSpeed: 0.005,
 	panSpeed: 0.001,
 	zoomSpeed: 1,
-	autoFovAnchorScale: 0.1,
+	autoFovAnchorScale: 1,
 	zoomMode: 'auto' as ZoomMode,
-	minDistance: Math.ceil(1.1 * CUBE_SIZE * Math.sqrt(3) / 2),
+	minDistance: 100,
 	maxDistance: 100000,
 	minZoom: 0.01,
 	maxZoom: 1000,
@@ -163,20 +175,22 @@ const speedFolder = gui.addFolder('speed');
 speedFolder.add(params, 'rotateSpeed', 0.0005, 0.02, 0.0001).onChange(applyControls);
 speedFolder.add(params, 'panSpeed', 0.0001, 0.02, 0.0001).onChange(applyControls);
 speedFolder.add(params, 'zoomSpeed', 0.1, 5, 0.1).onChange(applyControls);
-speedFolder.add(params, 'autoFovAnchorScale', 0, 1, 0.01).name('auto fov anchor').onChange(applyControls);
+speedFolder.add(params, 'autoFovAnchorScale', 0, 5, 0.01).name('auto fov anchor').onChange(applyControls);
 
 // Fit & Views
 
 const fitViewFolder = gui.addFolder('fit & views');
 
 fitViewFolder.add({ fitToBox: () => {
-	const box = new THREE.Box3().setFromObject(cube);
+	if (!model) return;
+	const box = new THREE.Box3().setFromObject(model);
 	controls.fitToBox(box, true, 0.1);
 } }, 'fitToBox').name('fit to box');
 
 fitViewFolder.add({ fitToSphere: () => {
+	if (!model) return;
 	const sphere = new THREE.Sphere();
-	new THREE.Box3().setFromObject(cube).getBoundingSphere(sphere);
+	new THREE.Box3().setFromObject(model).getBoundingSphere(sphere);
 	controls.fitToSphere(sphere, true, 0.1);
 } }, 'fitToSphere').name('fit to sphere');
 

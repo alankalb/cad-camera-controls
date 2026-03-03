@@ -395,7 +395,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 	): Promise<void> {
 		const endPos = this._transitionEndPos.copy(position);
 		const endZoom = options?.zoom ?? (this.camera instanceof OrthographicCamera ? this.camera.zoom : 1);
-		const endFov = options?.fov ?? (this.camera instanceof PerspectiveCamera ? this.camera.fov : 50);
+		const endFov = options?.fov ?? (this.camera instanceof PerspectiveCamera ? this._baseFov : 50);
 
 		return this._startTransition(endPos, endZoom, endFov, enableTransition, quaternion);
 	}
