@@ -92,6 +92,7 @@ const params = {
 	rotateSpeed: 0.005,
 	panSpeed: 0.001,
 	zoomSpeed: 1,
+	autoFovAnchorScale: 0.1,
 	zoomMode: 'auto' as ZoomMode,
 	minDistance: Math.ceil(1.1 * CUBE_SIZE * Math.sqrt(3) / 2),
 	maxDistance: 100000,
@@ -162,6 +163,7 @@ const speedFolder = gui.addFolder('speed');
 speedFolder.add(params, 'rotateSpeed', 0.0005, 0.02, 0.0001).onChange(applyControls);
 speedFolder.add(params, 'panSpeed', 0.0001, 0.02, 0.0001).onChange(applyControls);
 speedFolder.add(params, 'zoomSpeed', 0.1, 5, 0.1).onChange(applyControls);
+speedFolder.add(params, 'autoFovAnchorScale', 0, 1, 0.01).name('auto fov anchor').onChange(applyControls);
 
 // Fit & Views
 
@@ -329,6 +331,7 @@ function applyControls(): void {
 	controls.rotateSpeed = params.rotateSpeed;
 	controls.panSpeed = params.panSpeed;
 	controls.zoomSpeed = params.zoomSpeed;
+	controls.autoFovAnchorScale = params.autoFovAnchorScale;
 	controls.minDistance = Math.min(params.minDistance, params.maxDistance - 1);
 	controls.maxDistance = Math.max(params.maxDistance, params.minDistance + 1);
 	controls.minZoom = params.minZoom;

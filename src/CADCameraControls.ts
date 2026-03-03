@@ -338,8 +338,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		this.camera.getWorldDirection(forward);
 		const right = this._right.copy(CAMERA_RIGHT).applyQuaternion(this.camera.quaternion).normalize();
 		const up = this._up.copy(CAMERA_UP).applyQuaternion(this.camera.quaternion).normalize();
-		const projWidth = Math.abs(size.dot(right));
-		const projHeight = Math.abs(size.dot(up));
+		const projWidth = Math.abs(size.x * right.x) + Math.abs(size.y * right.y) + Math.abs(size.z * right.z);
+		const projHeight = Math.abs(size.x * up.x) + Math.abs(size.y * up.y) + Math.abs(size.z * up.z);
 
 		if (this.camera instanceof OrthographicCamera) {
 			const width = Math.max(projWidth, 0.001) * paddingScale;
@@ -349,7 +349,7 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 		} else {
 			const camera = this.camera as PerspectiveCamera;
 			const fov = camera.getEffectiveFOV() * MathUtils.DEG2RAD;
-			const projDepth = Math.abs(size.dot(forward));
+			const projDepth = Math.abs(size.x * forward.x) + Math.abs(size.y * forward.y) + Math.abs(size.z * forward.z);
 
 			const heightToFit = ((projWidth / projHeight) < camera.aspect ? projHeight : projWidth / camera.aspect) * paddingScale;
 			const distance = MathUtils.clamp(
@@ -449,8 +449,8 @@ class CADCameraControls extends EventDispatcher<CADCameraControlsEventMap> {
 
 	private _fitOrtho(center: Vector3, forward: Vector3, width: number, height: number, enableTransition: boolean): Promise<void> {
 		const camera = this.camera as OrthographicCamera;
-		const baseWidth = (camera.right - camera.left) / camera.zoom;
-		const baseHeight = (camera.top - camera.bottom) / camera.zoom;
+		const baseWidth = camera.right - camera.left;
+		const baseHeight = camera.top - camera.bottom;
 		const targetZoom = MathUtils.clamp(
 			Math.min(baseWidth / width, baseHeight / height),
 			this.minZoom, this.maxZoom
