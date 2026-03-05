@@ -319,7 +319,7 @@ Move the camera to a specific position and orientation. Returns a Promise that r
 
 **options.zoom** — Target `camera.zoom` for orthographic cameras. If omitted, current zoom is kept.
 
-**options.fov** — Target `camera.fov` for perspective cameras. If omitted, current FOV is kept.
+**options.fov** — Target `camera.fov` for perspective cameras. If omitted, the base FOV (set at construction) is restored.
 
 The pivot is not modified. Orientation is interpolated via quaternion slerp (shortest-path). Any active transition is cancelled by user interaction or by calling another transition method.
 

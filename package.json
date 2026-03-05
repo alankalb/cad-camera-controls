@@ -1,6 +1,6 @@
 {
   "name": "cad-camera-controls",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "description": "CAD-style camera controls for Three.js with fixed-pivot rotate, modifier pan, and cursor-anchored zoom. Optional React Three Fiber wrapper included.",
   "private": false,
   "type": "module",
