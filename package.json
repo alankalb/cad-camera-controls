@@ -30,6 +30,15 @@
     "3d"
   ],
   "license": "MIT",
+  "author": "Alan Kalbfleisch",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alankalb/cad-camera-controls.git"
+  },
+  "homepage": "https://alankalb.github.io/cad-camera-controls/",
+  "bugs": {
+    "url": "https://github.com/alankalb/cad-camera-controls/issues"
+  },
   "peerDependencies": {
     "@react-three/fiber": "^8.0.0 || ^9.0.0",
     "react": "^18.0.0 || ^19.0.0",
