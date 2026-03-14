@@ -1,5 +1,8 @@
 import * as THREE from 'three';
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { TeapotGeometry } from 'three/examples/jsm/geometries/TeapotGeometry.js';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import GUI from 'lil-gui';
 import { CADCameraControls } from '../src/CADCameraControls';
 import type { ZoomMode } from '../src/types';
@@ -41,26 +44,43 @@ const ORTHO_FRUSTUM = 1200;
 const grid = new THREE.GridHelper(GRID_SIZE, GRID_DIVISIONS, 0x444444, 0x222222);
 scene.add(grid);
 
-const axes = new THREE.AxesHelper(AXES_SIZE);
-scene.add(axes);
+function createAxisLine(positions: number[], color: number): Line2 {
+	const geometry = new LineGeometry();
+	geometry.setPositions(positions);
+	const material = new LineMaterial({ color, linewidth: 3, resolution: new THREE.Vector2(window.innerWidth, window.innerHeight) });
+	return new Line2(geometry, material);
+}
 
-let model: THREE.Mesh | null = null;
+const pivotGroup = new THREE.Group();
+const axisX = createAxisLine([0, 0, 0, AXES_SIZE, 0, 0], 0xff0000);
+const axisY = createAxisLine([0, 0, 0, 0, AXES_SIZE, 0], 0x00ff00);
+const axisZ = createAxisLine([0, 0, 0, 0, 0, AXES_SIZE], 0x0000ff);
+pivotGroup.add(axisX, axisY, axisZ);
+scene.add(pivotGroup);
 
-// Load teapot STL
-new STLLoader().loadAsync('/teapot.stl').then((geometry) => {
-	geometry.center();
-	geometry.rotateX(- Math.PI / 2);
-	geometry.computeBoundingBox();
-	model = new THREE.Mesh(geometry, new THREE.MeshNormalMaterial());
-	scene.add(model);
+const pivotCanvas = document.createElement('canvas');
+pivotCanvas.width = 64;
+pivotCanvas.height = 64;
+const ctx = pivotCanvas.getContext('2d')!;
+ctx.beginPath();
+ctx.arc(32, 32, 28, 0, Math.PI * 2);
+ctx.fillStyle = '#ffdd00';
+ctx.fill();
+ctx.lineWidth = 4;
+ctx.strokeStyle = '#000000';
+ctx.stroke();
+const pivotTexture = new THREE.CanvasTexture(pivotCanvas);
+const pivotSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: pivotTexture, depthTest: false, sizeAttenuation: false }));
+pivotSprite.scale.set(0.015, 0.015, 1);
+pivotSprite.renderOrder = 999;
+scene.add(pivotSprite);
 
-	// Update minDistance based on loaded model size
-	const box = geometry.boundingBox!;
-	const size = box.getSize(new THREE.Vector3());
-	const diagonal = size.length();
-	params.minDistance = Math.ceil(diagonal * 0.6);
-	applyControls();
-});
+const teapotGeometry = new TeapotGeometry(200, 15, true, true, true, true, true);
+teapotGeometry.computeBoundingBox();
+const teapotSphere = new THREE.Sphere();
+teapotGeometry.boundingBox!.getBoundingSphere(teapotSphere);
+const model = new THREE.Mesh(teapotGeometry, new THREE.MeshNormalMaterial({ side: THREE.DoubleSide }));
+scene.add(model);
 
 // Camera
 
@@ -95,6 +115,7 @@ const params = {
 	enabled: true,
 	enableDamping: true,
 	dampingFactor: 0.2,
+	showPivot: true,
 	pivotX: 0,
 	pivotY: 0,
 	pivotZ: 0,
@@ -106,7 +127,7 @@ const params = {
 	zoomSpeed: 1,
 	autoFovAnchorScale: 1,
 	zoomMode: 'auto' as ZoomMode,
-	minDistance: 100,
+	minDistance: Math.ceil(teapotSphere.radius),
 	maxDistance: 100000,
 	minZoom: 0.01,
 	maxZoom: 1000,
@@ -150,6 +171,7 @@ gui.add(params, 'enableDamping').onChange(applyControls);
 gui.add(params, 'dampingFactor', 0, 1, 0.01).onChange(applyControls);
 
 const pivotFolder = gui.addFolder('pivot');
+pivotFolder.add(params, 'showPivot').name('show pivot').onChange(applyControls);
 pivotFolder.add(params, 'pivotX', - 1000, 1000, 1).onChange(applyControls);
 pivotFolder.add(params, 'pivotY', - 1000, 1000, 1).onChange(applyControls);
 pivotFolder.add(params, 'pivotZ', - 1000, 1000, 1).onChange(applyControls);
@@ -182,13 +204,11 @@ speedFolder.add(params, 'autoFovAnchorScale', 0, 5, 0.01).name('auto fov anchor'
 const fitViewFolder = gui.addFolder('fit & views');
 
 fitViewFolder.add({ fitToBox: () => {
-	if (!model) return;
 	const box = new THREE.Box3().setFromObject(model);
 	controls.fitToBox(box, true, 0.1);
 } }, 'fitToBox').name('fit to box');
 
 fitViewFolder.add({ fitToSphere: () => {
-	if (!model) return;
 	const sphere = new THREE.Sphere();
 	new THREE.Box3().setFromObject(model).getBoundingSphere(sphere);
 	controls.fitToSphere(sphere, true, 0.1);
@@ -340,7 +360,10 @@ function applyControls(): void {
 	controls.enableDamping = params.enableDamping;
 	controls.dampingFactor = params.dampingFactor;
 	controls.pivot.set(params.pivotX, params.pivotY, params.pivotZ);
-	axes.position.copy(controls.pivot);
+	pivotGroup.visible = params.showPivot;
+	pivotGroup.position.copy(controls.pivot);
+	pivotSprite.visible = params.showPivot;
+	pivotSprite.position.copy(controls.pivot);
 	controls.inputBindings = getInputBindings();
 	controls.rotateSpeed = params.rotateSpeed;
 	controls.panSpeed = params.panSpeed;
@@ -376,6 +399,10 @@ function onWindowResize(): void {
 
 	camera.updateProjectionMatrix();
 	renderer.setSize(window.innerWidth, window.innerHeight);
+	const res = new THREE.Vector2(window.innerWidth, window.innerHeight);
+	axisX.material.resolution = res;
+	axisY.material.resolution = res;
+	axisZ.material.resolution = res;
 }
 
 function render(): void {
