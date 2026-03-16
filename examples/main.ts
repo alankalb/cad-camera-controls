@@ -34,7 +34,7 @@ scene.add(directional);
 
 const GRID_SIZE = 4000;
 const GRID_DIVISIONS = 40;
-const AXES_SIZE = 300;
+const AXES_SIZE = 350;
 const CAMERA_FOV = 50;
 const CAMERA_NEAR = 0.1;
 const CAMERA_FAR = 200000;
@@ -47,8 +47,9 @@ scene.add(grid);
 function createAxisLine(positions: number[], color: number): Line2 {
 	const geometry = new LineGeometry();
 	geometry.setPositions(positions);
-	const material = new LineMaterial({ color, linewidth: 3, resolution: new THREE.Vector2(window.innerWidth, window.innerHeight) });
-	return new Line2(geometry, material);
+	const material = new LineMaterial({ color, linewidth: 3,  resolution: new THREE.Vector2(window.innerWidth, window.innerHeight) });
+	const line = new Line2(geometry, material);
+	return line;
 }
 
 const pivotGroup = new THREE.Group();
@@ -70,15 +71,15 @@ ctx.lineWidth = 4;
 ctx.strokeStyle = '#000000';
 ctx.stroke();
 const pivotTexture = new THREE.CanvasTexture(pivotCanvas);
-const pivotSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: pivotTexture, depthTest: false, sizeAttenuation: false }));
+const pivotSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: pivotTexture, depthTest: false, sizeAttenuation: false, transparent: true, opacity: 0.5 }));
 pivotSprite.scale.set(0.015, 0.015, 1);
 pivotSprite.renderOrder = 999;
 scene.add(pivotSprite);
 
 const teapotGeometry = new TeapotGeometry(200, 15, true, true, true, true, true);
-teapotGeometry.computeBoundingBox();
-const teapotSphere = new THREE.Sphere();
-teapotGeometry.boundingBox!.getBoundingSphere(teapotSphere);
+teapotGeometry.center();
+teapotGeometry.computeBoundingSphere();
+const teapotSphere = teapotGeometry.boundingSphere!;
 const model = new THREE.Mesh(teapotGeometry, new THREE.MeshNormalMaterial({ side: THREE.DoubleSide }));
 scene.add(model);
 
@@ -127,7 +128,7 @@ const params = {
 	zoomSpeed: 1,
 	autoFovAnchorScale: 1,
 	zoomMode: 'auto' as ZoomMode,
-	minDistance: Math.ceil(teapotSphere.radius),
+	minDistance: Math.ceil(teapotSphere.radius * 1.05),
 	maxDistance: 100000,
 	minZoom: 0.01,
 	maxZoom: 1000,
@@ -209,9 +210,8 @@ fitViewFolder.add({ fitToBox: () => {
 } }, 'fitToBox').name('fit to box');
 
 fitViewFolder.add({ fitToSphere: () => {
-	const sphere = new THREE.Sphere();
-	new THREE.Box3().setFromObject(model).getBoundingSphere(sphere);
-	controls.fitToSphere(sphere, true, 0.1);
+	teapotGeometry.computeBoundingSphere();
+	controls.fitToSphere(teapotGeometry.boundingSphere!, true);
 } }, 'fitToSphere').name('fit to sphere');
 
 // Saved views
